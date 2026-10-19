@@ -40,7 +40,7 @@ The Phase 1 commit installed no embedding, vector-store, LangGraph, MCP, tracing
 
 ### Source normalization and date windows
 
-`RepositoryIngestor` reads GitHub's issue listing (which includes PR summaries), PR details, issue discussion comments, PR line review comments, and commits. It selects records with creation, update, close, or merge timestamps inside a half-open UTC window and includes comments created in that window. The live endpoint's `since` filter selects records updated after the start date. This avoids retrieving the entire repository for common recent windows, but a long or very active window can still hit the client's explicit pagination cap. GitHub's current issue body is not a historical reconstruction of its state at the window end; a future timeline-based snapshot would be needed for that. The fixture evaluation avoids this drift by using a committed capture.
+The initial Phase 2 `RepositoryIngestor` read GitHub's issue listing (which includes PR summaries), PR details, issue discussion comments, PR line review comments, and commits. It selects records with creation, update, close, or merge timestamps inside a half-open UTC window and includes comments created in that window. The live endpoint's `since` filter selects records updated after the start date. This avoids retrieving the entire repository for common recent windows, but a long or very active window can still hit the client's explicit pagination cap. GitHub's current issue body is not a historical reconstruction of its state at the window end; a future timeline-based snapshot would be needed for that. The fixture evaluation avoids this drift by using a committed capture. The rate-limit repair below changes how PR and comment records are fetched while retaining their normalized fields.
 
 All sources become a `SourceDocument` with canonical ID, URL, title, body, author, dates, labels and comments. Each chunk keeps its parent issue, PR or commit URL and metadata. Comment text stays distinguishable by author and comment URL in the passage, even though the parent URL is the primary citation key.
 
@@ -85,3 +85,11 @@ All Phase 3 tests are offline and use the pinned recorded `pallets/click` fields
 - [LangGraph StateGraph reference](https://langchain-ai.github.io/langgraph/reference/graphs/)
 - [Groq chat completions API](https://console.groq.com/docs/api-reference)
 - [Gemini generateContent API](https://ai.google.dev/api/generate-content)
+
+## Rate-limit repair after Phase 3
+
+A live `pallets/click` ingest exhausted GitHub's unauthenticated hourly quota while fetching per-issue comments. The attempted run had populated many independent comment-list cache entries; the 5-minute cache TTL could not make the next run reliably resume after an hourly reset. Ingestion now reads repository-wide issue discussion comments and PR review comments with `since`, groups their canonical parent URLs by number, then attaches only comments created within the requested window. It uses PR title, body, author, and dates from the issue listing, which already carries those fields, so it does not request a PR detail per item. The separate MCP `get_pull_request` tool still fetches details when the agent asks for them. This removes repeated comment and PR-detail requests without dropping the normalized fields. The recorded fixture adapter derives parent URLs from its recorded keys, preserving its existing contents and offline evaluation behavior.
+
+The CLI now prints a rate-limit recovery instruction instead of a traceback. The optional `GITHUB_TOKEN` is a GitHub credential independent of the LLM provider key; no paid service is required. A run that still exceeds the quota fails before any Chroma writes, so it cannot report a partial ingest as complete.
+
+Sources: [repository issue comments](https://docs.github.com/en/rest/issues/comments), [repository PR review comments](https://docs.github.com/en/rest/pulls/comments), [GitHub REST rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).

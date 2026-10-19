@@ -278,10 +278,24 @@ class GitHubClient:
             f"{self.repo_path(repo)}/issues/{number}/comments", {"per_page": 100}
         )
 
+    def list_issue_comments_since(self, repo: str, since: str) -> list[dict[str, Any]]:
+        """List issue and PR discussion comments updated since a timestamp."""
+        return self.get_paginated(
+            f"{self.repo_path(repo)}/issues/comments",
+            {"since": since, "sort": "updated", "direction": "asc", "per_page": 100},
+        )
+
     def list_pr_review_comments(self, repo: str, number: int) -> list[dict[str, Any]]:
         """List line-level review comments on a pull request."""
         return self.get_paginated(
             f"{self.repo_path(repo)}/pulls/{number}/comments", {"per_page": 100}
+        )
+
+    def list_pr_review_comments_since(self, repo: str, since: str) -> list[dict[str, Any]]:
+        """List line-level PR review comments updated since a timestamp."""
+        return self.get_paginated(
+            f"{self.repo_path(repo)}/pulls/comments",
+            {"since": since, "sort": "updated", "direction": "asc", "per_page": 100},
         )
 
     def list_commits_between(self, repo: str, since: str, until: str) -> list[dict[str, Any]]:

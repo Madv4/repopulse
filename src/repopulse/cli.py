@@ -12,6 +12,7 @@ from mcp.client.stdio import stdio_client
 from repopulse.agent import RepoPulseAgent
 from repopulse.config import Settings
 from repopulse.github.client import GitHubClient
+from repopulse.github.models import GitHubRateLimitError
 from repopulse.ingestion.chunking import FixedChunker, StructureChunker
 from repopulse.ingestion.embed import LocalEmbedder
 from repopulse.ingestion.github import RepositoryIngestor
@@ -96,18 +97,27 @@ def main() -> None:
         print(f"Local embedding and reranker models cached in {settings.model_cache_dir}")
     elif args.command == "ingest":
         chunker = FixedChunker() if args.strategy == "fixed" else StructureChunker()
-        stats = RepositoryIngestor(GitHubClient(settings)).ingest(
-            args.repo,
-            _midnight(args.since),
-            _midnight(args.until),
-            chunker,
-            ChromaStore(settings.chroma_dir, chunker.name),
-            LocalEmbedder(
-                settings.model_cache_dir,
-                settings.embedding_model,
-                revision=settings.embedding_revision,
-            ),
-        )
+        try:
+            stats = RepositoryIngestor(GitHubClient(settings)).ingest(
+                args.repo,
+                _midnight(args.since),
+                _midnight(args.until),
+                chunker,
+                ChromaStore(settings.chroma_dir, chunker.name),
+                LocalEmbedder(
+                    settings.model_cache_dir,
+                    settings.embedding_model,
+                    revision=settings.embedding_revision,
+                ),
+            )
+        except GitHubRateLimitError as exc:
+            hint = (
+                "A free GitHub personal access token in local .env as GITHUB_TOKEN "
+                "can raise the limit; otherwise retry after the reset."
+                if not settings.github_token
+                else "Retry after the GitHub reset."
+            )
+            parser.exit(2, f"{exc}. {hint}\n")
         print(f"Ingested {stats.documents} documents and {stats.chunks} chunks")
     elif args.command == "search":
         store = ChromaStore(settings.chroma_dir, args.strategy)

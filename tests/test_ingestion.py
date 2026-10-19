@@ -110,9 +110,11 @@ def test_persistent_chroma_replacement_and_reranking(tmp_path: Path) -> None:
 def test_github_window_ingests_issue_pr_comments_and_commit(tmp_path: Path) -> None:
     start = datetime(2026, 9, 1, tzinfo=UTC)
     end = datetime(2026, 10, 1, tzinfo=UTC)
+    calls: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
+        calls.append(path)
         if path.endswith("/issues"):
             assert request.url.params["since"] == "2026-09-01T00:00:00Z"
             return httpx.Response(
@@ -133,7 +135,7 @@ def test_github_window_ingests_issue_pr_comments_and_commit(tmp_path: Path) -> N
                         "number": 2,
                         "html_url": "https://github.com/a/b/pull/2",
                         "title": "beta fix",
-                        "body": "",
+                        "body": "beta detail",
                         "user": {"login": "dev"},
                         "created_at": "2026-09-05T00:00:00Z",
                         "updated_at": "2026-09-06T00:00:00Z",
@@ -154,11 +156,13 @@ def test_github_window_ingests_issue_pr_comments_and_commit(tmp_path: Path) -> N
                     },
                 ],
             )
-        if path.endswith("/issues/1/comments"):
+        if path.endswith("/issues/comments"):
+            assert request.url.params["since"] == "2026-09-01T00:00:00Z"
             return httpx.Response(
                 200,
                 json=[
                     {
+                        "issue_url": "https://api.github.com/repos/a/b/issues/1",
                         "html_url": "https://github.com/a/b/issues/1#issuecomment-7",
                         "body": "follow-up alpha",
                         "user": {"login": "peer"},
@@ -166,25 +170,13 @@ def test_github_window_ingests_issue_pr_comments_and_commit(tmp_path: Path) -> N
                     }
                 ],
             )
-        if path.endswith("/pulls/2"):
-            return httpx.Response(
-                200,
-                json={
-                    "number": 2,
-                    "html_url": "https://github.com/a/b/pull/2",
-                    "title": "beta fix",
-                    "body": "beta detail",
-                    "user": {"login": "dev"},
-                    "created_at": "2026-09-05T00:00:00Z",
-                    "updated_at": "2026-09-06T00:00:00Z",
-                    "review_comments": 1,
-                },
-            )
-        if path.endswith("/pulls/2/comments"):
+        if path.endswith("/pulls/comments"):
+            assert request.url.params["since"] == "2026-09-01T00:00:00Z"
             return httpx.Response(
                 200,
                 json=[
                     {
+                        "pull_request_url": "https://api.github.com/repos/a/b/pulls/2",
                         "html_url": "https://github.com/a/b/pull/2#discussion-r2",
                         "body": "review beta",
                         "user": {"login": "reviewer"},
@@ -219,7 +211,11 @@ def test_github_window_ingests_issue_pr_comments_and_commit(tmp_path: Path) -> N
     assert sources[0].labels == ["bug"]
     assert sources[0].comments[0].body == "follow-up alpha"
     assert sources[1].comments[0].body == "review beta"
+    assert sources[1].body == "beta detail"
     assert sources[2].title == "gamma change"
     store = ChromaStore(tmp_path / "chroma", "fixed")
     stats = ingestor.ingest("a/b", start, end, FixedChunker(), store, KeywordEmbedder())
     assert stats.documents == 3 and stats.chunks >= 3
+    assert len(calls) == 4
+    assert "/repos/a/b/issues/1/comments" not in calls
+    assert "/repos/a/b/pulls/2" not in calls

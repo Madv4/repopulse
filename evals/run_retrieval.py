@@ -80,10 +80,28 @@ class RecordedGitHubClient:
         self.repo_path(repo)
         return self.snapshot.issue_comments.get(str(number), [])
 
+    def list_issue_comments_since(self, repo: str, since: str) -> list[dict[str, Any]]:
+        """Flatten recorded discussion comments with their recorded issue keys."""
+        self.repo_path(repo)
+        return [
+            {**comment, "issue_url": f"https://api.github.com/repos/{repo}/issues/{number}"}
+            for number, comments in self.snapshot.issue_comments.items()
+            for comment in comments
+        ]
+
     def list_pr_review_comments(self, repo: str, number: int) -> list[dict[str, Any]]:
         """Return recorded line-level PR review comments."""
         self.repo_path(repo)
         return self.snapshot.review_comments.get(str(number), [])
+
+    def list_pr_review_comments_since(self, repo: str, since: str) -> list[dict[str, Any]]:
+        """Flatten recorded review comments with their recorded PR keys."""
+        self.repo_path(repo)
+        return [
+            {**comment, "pull_request_url": f"https://api.github.com/repos/{repo}/pulls/{number}"}
+            for number, comments in self.snapshot.review_comments.items()
+            for comment in comments
+        ]
 
     def list_commits_between(self, repo: str, since: str, until: str) -> list[dict[str, Any]]:
         """Return recorded commit summaries."""

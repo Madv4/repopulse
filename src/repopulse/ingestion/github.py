@@ -2,10 +2,10 @@
 
 from datetime import UTC, datetime
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
 
-from repopulse.github.models import GitHubResponse
 from repopulse.ingestion.chunking import Chunker
 from repopulse.ingestion.embed import Embedder
 from repopulse.ingestion.models import SourceComment, SourceDocument
@@ -80,23 +80,22 @@ def issue_document(
 def pull_document(
     repo: str,
     issue: dict[str, Any],
-    pull: dict[str, Any],
     comments: list[SourceComment] | None = None,
 ) -> SourceDocument:
-    """Normalize a PR detail plus its issue metadata and comments."""
-    number = int(pull["number"])
-    labels = issue.get("labels") or pull.get("labels") or []
+    """Normalize the PR record returned by GitHub's issue listing."""
+    number = int(issue["number"])
+    labels = issue.get("labels") or []
     return SourceDocument(
         repo=repo,
         kind="pull_request",
         source_id=f"{repo}:pull_request:{number}",
         number=number,
-        url=_text(pull.get("html_url")),
-        title=_text(pull.get("title")),
-        body=_text(pull.get("body")),
-        author=_author(pull.get("user")),
-        created_at=_timestamp(pull.get("created_at")),
-        updated_at=_optional_timestamp(pull.get("updated_at")),
+        url=_text(issue.get("html_url")),
+        title=_text(issue.get("title")),
+        body=_text(issue.get("body")),
+        author=_author(issue.get("user")),
+        created_at=_timestamp(issue.get("created_at")),
+        updated_at=_optional_timestamp(issue.get("updated_at")),
         labels=[_text(_mapping(label).get("name")) for label in labels],
         comments=comments or [],
     )
@@ -135,6 +134,25 @@ def _utc_string(value: datetime) -> str:
     return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _comments_by_number(
+    rows: list[dict[str, Any]], repo: str, *, kind: str
+) -> dict[int, list[dict[str, Any]]]:
+    """Group repository-wide comments by their canonical issue or PR API URL."""
+    field = "issue_url" if kind == "issues" else "pull_request_url"
+    prefix = f"/repos/{repo}/{kind}/"
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        value = row.get(field)
+        if not isinstance(value, str):
+            raise ValueError(f"GitHub comment is missing {field}")
+        path = urlsplit(value).path
+        if not path.startswith(prefix) or not path[len(prefix) :].isdigit():
+            raise ValueError(f"GitHub comment has an invalid {field}")
+        number = int(path[len(prefix) :])
+        grouped.setdefault(number, []).append(row)
+    return grouped
+
+
 class IngestionStats(BaseModel):
     """Actual count of documents and chunks written to Chroma."""
 
@@ -149,11 +167,9 @@ class GitHubReader(Protocol):
 
     def list_issues_since(self, repo: str, since: str) -> list[dict[str, Any]]: ...
 
-    def get_pull_request(self, repo: str, number: int) -> GitHubResponse: ...
+    def list_issue_comments_since(self, repo: str, since: str) -> list[dict[str, Any]]: ...
 
-    def list_issue_comments(self, repo: str, number: int) -> list[dict[str, Any]]: ...
-
-    def list_pr_review_comments(self, repo: str, number: int) -> list[dict[str, Any]]: ...
+    def list_pr_review_comments_since(self, repo: str, since: str) -> list[dict[str, Any]]: ...
 
     def list_commits_between(self, repo: str, since: str, until: str) -> list[dict[str, Any]]: ...
 
@@ -170,27 +186,22 @@ class RepositoryIngestor:
         if start.tzinfo is None or end.tzinfo is None or start >= end:
             raise ValueError("start and end must be timezone-aware with start < end")
         documents: list[SourceDocument] = []
-        issues = self.github.list_issues_since(repo, _utc_string(start))
-        for issue in issues:
-            if not _in_window(issue, start, end):
-                continue
+        since = _utc_string(start)
+        issues = self.github.list_issues_since(repo, since)
+        relevant = [issue for issue in issues if _in_window(issue, start, end)]
+        discussions = _comments_by_number(
+            self.github.list_issue_comments_since(repo, since), repo, kind="issues"
+        )
+        reviews = _comments_by_number(
+            self.github.list_pr_review_comments_since(repo, since), repo, kind="pulls"
+        )
+        for issue in relevant:
             number = int(issue["number"])
-            discussion = (
-                self.github.list_issue_comments(repo, number)
-                if int(issue.get("comments") or 0)
-                else []
-            )
+            discussion = discussions.get(number, [])
             if "pull_request" in issue:
-                pull_data = self.github.get_pull_request(repo, number).data
-                if not isinstance(pull_data, dict):
-                    raise ValueError("GitHub pull request response was not an object")
-                review = (
-                    self.github.list_pr_review_comments(repo, number)
-                    if int(pull_data.get("review_comments") or 0)
-                    else []
-                )
+                review = reviews.get(number, [])
                 comments = _comments(discussion + review, start, end)
-                documents.append(pull_document(repo, issue, pull_data, comments))
+                documents.append(pull_document(repo, issue, comments))
             else:
                 documents.append(issue_document(repo, issue, _comments(discussion, start, end)))
         for commit in self.github.list_commits_between(repo, _utc_string(start), _utc_string(end)):
