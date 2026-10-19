@@ -225,15 +225,17 @@ def create_server(service: ToolService) -> FastMCP:
 def main() -> None:
     """Start the standalone MCP server over stdio."""
     settings = Settings()
+    embedder = LocalEmbedder(
+        settings.model_cache_dir,
+        settings.embedding_model,
+        revision=settings.embedding_revision,
+    )
+    embedder.load()
 
     def local_searcher() -> Retriever:
         return Retriever(
             ChromaStore(settings.chroma_dir, "structure"),
-            LocalEmbedder(
-                settings.model_cache_dir,
-                settings.embedding_model,
-                revision=settings.embedding_revision,
-            ),
+            embedder,
         )
 
     create_server(ToolService(GitHubClient(settings), local_searcher)).run(transport="stdio")

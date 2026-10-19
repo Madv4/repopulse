@@ -31,6 +31,7 @@ async def _ask(
     question: str, repo: str, settings: Settings, max_steps: int, token_budget: int
 ) -> None:
     """Run the agent against this installation's local MCP stdio server."""
+    print("Loading the cached local embedding model...", file=sys.stderr, flush=True)
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "repopulse.mcp_server"],
@@ -38,18 +39,22 @@ async def _ask(
     )
     async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
         await session.initialize()
+        print("Planning the answer...", file=sys.stderr, flush=True)
         agent = RepoPulseAgent(
             create_provider(settings),
             MCPGateway(session),
             max_steps=max_steps,
             token_budget=token_budget,
+            progress=lambda message: print(message, file=sys.stderr, flush=True),
         )
         answer = await agent.ask(question, repo)
-        print(answer.model_dump_json(indent=2))
+        print(answer.model_dump_json(indent=2, ensure_ascii=True))
 
 
 def main() -> None:
     """Dispatch local commands without loading an LLM or model unnecessarily."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(prog="repopulse")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="Check the selected provider without network calls")

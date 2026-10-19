@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal, Protocol, TypedDict
 
@@ -25,6 +26,9 @@ TOOL_NAMES = frozenset(
     }
 )
 CITABLE_KINDS = frozenset({"issue", "pull_request", "commit"})
+ISSUE_QUESTION_STOPWORDS = frozenset(
+    {"which", "what", "issue", "reported", "report", "about", "handling", "the", "and", "for"}
+)
 
 
 class Claim(BaseModel):
@@ -104,6 +108,26 @@ def _json_object(text: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _citable_for_question(question: str, evidence: list[Evidence]) -> list[Evidence]:
+    citable = [item for item in evidence if item.kind in CITABLE_KINDS]
+    if re.search(r"\b(?:which|what) issue\b", question, re.IGNORECASE) is None:
+        return citable
+    terms = {
+        term
+        for term in re.findall(r"[a-z0-9]+", question.lower())
+        if len(term) > 2 and term not in ISSUE_QUESTION_STOPWORDS
+    }
+    if not terms:
+        return [item for item in citable if item.kind == "issue"]
+    threshold = min(2, len(terms))
+    return [
+        item
+        for item in citable
+        if item.kind == "issue"
+        and sum(term in (item.title + " " + item.excerpt).lower() for term in terms) >= threshold
+    ]
+
+
 class RepoPulseAgent:
     """Plan, call MCP tools and synthesize within hard graph limits."""
 
@@ -116,6 +140,7 @@ class RepoPulseAgent:
         token_budget: int = 8000,
         max_replans: int = 3,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        progress: Callable[[str], None] | None = None,
     ) -> None:
         if max_steps < 1 or token_budget < 1 or max_replans < 0:
             raise ValueError("agent limits must be positive (max_replans may be zero)")
@@ -125,6 +150,7 @@ class RepoPulseAgent:
         self.token_budget = token_budget
         self.max_replans = max_replans
         self.sleep = sleep
+        self.progress = progress
         graph = StateGraph(AgentState)
         graph.add_node("plan", self._plan)
         graph.add_node("select", self._select)
@@ -147,7 +173,14 @@ class RepoPulseAgent:
         graph.add_edge("synthesize", END)
         self.graph = graph.compile()
 
-    def _complete(self, state: AgentState, instruction: str, payload: dict[str, Any]) -> str:
+    def _complete(
+        self,
+        state: AgentState,
+        instruction: str,
+        payload: dict[str, Any],
+        *,
+        output_limit: int = 512,
+    ) -> str:
         messages = [
             ChatMessage(role="system", content=instruction),
             ChatMessage(role="user", content=json.dumps(payload, ensure_ascii=False)),
@@ -157,7 +190,7 @@ class RepoPulseAgent:
         remaining = self.token_budget - state["tokens_used"] - estimate
         if remaining < 1:
             raise BudgetExhausted
-        response = self.provider.complete(messages, max_output_tokens=min(remaining, 512))
+        response = self.provider.complete(messages, max_output_tokens=min(remaining, output_limit))
         used = max(
             estimate + max(1, len(response.text) // 4),
             response.prompt_tokens + response.completion_tokens,
@@ -241,6 +274,11 @@ class RepoPulseAgent:
                 break
             state["steps"] += 1
             try:
+                if self.progress is not None:
+                    self.progress(
+                        f"Running {choice.tool} (step {state['steps']}/{self.max_steps}, "
+                        f"attempt {retry + 1}/3)"
+                    )
                 result = await self.gateway.call(choice.tool, choice.args)
                 known = {(item.kind, item.url, item.excerpt) for item in state["evidence"]}
                 state["evidence"].extend(
@@ -267,7 +305,7 @@ class RepoPulseAgent:
         if state["steps"] >= self.max_steps or state["tokens_used"] >= self.token_budget:
             state["decision"] = "stop"
             return state
-        citable = [e for e in state["evidence"] if e.kind in CITABLE_KINDS]
+        citable = _citable_for_question(state["question"], state["evidence"])
         try:
             text = self._complete(
                 state,
@@ -302,7 +340,9 @@ class RepoPulseAgent:
         return {"continue": "select", "replan": "plan"}.get(state["decision"], "synthesize")
 
     def _synthesize(self, state: AgentState) -> AgentState:
-        sources = {e.url: e for e in state["evidence"] if e.kind in CITABLE_KINDS}
+        sources = {
+            e.url: e for e in _citable_for_question(state["question"], state["evidence"])
+        }
         answer = Answer(limitations=state["limitations"].copy())
         if state["steps"] >= self.max_steps:
             answer.limitations.append("The maximum tool-step limit was reached.")
@@ -310,7 +350,7 @@ class RepoPulseAgent:
             answer.limitations.append("The token budget was exhausted.")
         if not sources:
             answer.limitations.append(
-                "No citable issue, pull request or commit evidence was retrieved."
+                "No citable issue, pull request or commit evidence matched the question."
             )
             state["answer"] = answer
             return state
@@ -325,6 +365,7 @@ class RepoPulseAgent:
                     "question": state["question"],
                     "evidence": [e.model_dump() for e in list(sources.values())[:8]],
                 },
+                output_limit=1024,
             )
             proposed = Answer.model_validate(_json_object(text))
         except (BudgetExhausted, ProviderError, ValidationError):

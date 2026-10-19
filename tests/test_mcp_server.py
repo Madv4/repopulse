@@ -5,8 +5,9 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -126,3 +127,13 @@ def test_stdio_mcp_round_trip_uses_recorded_fixture() -> None:
             )
 
     asyncio.run(round_trip())
+
+
+def test_gateway_times_out_a_stalled_tool_call() -> None:
+    class HangingSession:
+        async def call_tool(self, name: str, arguments: dict[str, str | int]) -> None:
+            await asyncio.Event().wait()
+
+    gateway = MCPGateway(cast(ClientSession, HangingSession()), timeout_seconds=0.01)
+    with pytest.raises(TimeoutError):
+        asyncio.run(gateway.call("semantic_search", {"repo": SNAPSHOT["repo"], "query": "ANSI"}))

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.1:8b"
     groq_api_key: SecretStr | None = Field(default=None, repr=False)
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     gemini_api_key: SecretStr | None = Field(default=None, repr=False)
     gemini_model: str = "gemini-2.5-flash"
     mock_response: str = "Mock response"

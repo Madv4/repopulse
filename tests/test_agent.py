@@ -163,3 +163,38 @@ def test_default_mock_still_works_offline() -> None:
     answer = run(RepoPulseAgent(MockProvider(), FakeGateway()))
     assert answer.summary is not None
     assert answer.summary.citations == [EVIDENCE.url]
+
+
+def test_issue_identity_rejects_an_unrelated_issue_citation() -> None:
+    unrelated = next(
+        row
+        for row in json.loads(FIXTURE.read_text(encoding="utf-8"))["issues"]
+        if row["number"] == 3886
+    )
+    wrong = Evidence(
+        url=unrelated["html_url"],
+        kind="issue",
+        title=unrelated["title"],
+        excerpt=unrelated["body"][:600],
+    )
+
+    class MixedGateway(FakeGateway):
+        async def call(self, name: str, arguments: dict[str, str | int]) -> ToolEvidence:
+            return ToolEvidence(evidence=[wrong, EVIDENCE])
+
+    provider = MockProvider(
+        [
+            '{"subquestions":["find ANSI color issue"]}',
+            '{"tool":"semantic_search","args":{"query":"ANSI color"}}',
+            '{"action":"enough"}',
+            json.dumps({"summary": {"text": "Wrong issue", "citations": [wrong.url]}}),
+        ]
+    )
+    answer = asyncio.run(
+        RepoPulseAgent(provider, MixedGateway()).ask(
+            "Which issue reported ANSI color handling?", "pallets/click"
+        )
+    )
+    assert answer.summary is not None
+    assert answer.summary.citations == [EVIDENCE.url]
+    assert answer.summary.text == EVIDENCE.title

@@ -1,5 +1,6 @@
 """MCP session adapter used by the production agent CLI."""
 
+import asyncio
 import json
 from typing import Any
 
@@ -11,12 +12,18 @@ from repopulse.mcp_server import ToolEvidence
 class MCPGateway:
     """Call the local MCP server and validate each structured evidence result."""
 
-    def __init__(self, session: ClientSession) -> None:
+    def __init__(self, session: ClientSession, *, timeout_seconds: float = 60.0) -> None:
+        if timeout_seconds <= 0:
+            raise ValueError("tool timeout must be positive")
         self.session = session
+        self.timeout_seconds = timeout_seconds
 
     async def call(self, name: str, arguments: dict[str, str | int]) -> ToolEvidence:
         """Return one validated MCP tool result or raise its safe error."""
-        result = await self.session.call_tool(name, arguments=arguments)
+        result = await asyncio.wait_for(
+            self.session.call_tool(name, arguments=arguments),
+            timeout=self.timeout_seconds,
+        )
         if result.isError:
             raise RuntimeError(f"MCP tool {name} returned an error")
         structured: Any = result.structuredContent
