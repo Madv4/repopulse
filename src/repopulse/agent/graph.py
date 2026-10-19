@@ -4,12 +4,12 @@ import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable
-from typing import Any, Literal, Protocol, TypedDict
+from typing import Any, Literal, Protocol, TypedDict, TypeVar
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field, ValidationError
 
-from repopulse.agent.citations import supports_text
+from repopulse.agent.citations import quote_in_evidence
 from repopulse.github.client import GitHubClient
 from repopulse.llm.base import ChatMessage, LLMProvider, ProviderError
 from repopulse.mcp_server import Evidence, ToolEvidence
@@ -31,11 +31,19 @@ TOOL_NAMES = frozenset(
 CITABLE_KINDS = frozenset({"issue", "pull_request", "commit"})
 
 
+class EvidenceQuote(BaseModel):
+    """A short source quote keyed to one retrieved passage."""
+
+    evidence_id: str = Field(min_length=1)
+    quote: str = Field(min_length=1)
+
+
 class Claim(BaseModel):
     """One answer assertion with at least one retrieved citation."""
 
     text: str = Field(min_length=1)
-    citations: list[str] = Field(min_length=1)
+    evidence: list[EvidenceQuote] = Field(min_length=1)
+    citations: list[str] = Field(default_factory=list)
 
 
 class Answer(BaseModel):
@@ -105,11 +113,16 @@ class BudgetExhausted(Exception):
 
 
 def _json_object(text: str) -> dict[str, Any]:
-    try:
-        value = json.loads(text)
-    except ValueError:
-        return {}
-    return value if isinstance(value, dict) else {}
+    cleaned = text.strip()
+    if cleaned.startswith("```") and cleaned.endswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.I)
+    value = json.loads(cleaned)
+    if not isinstance(value, dict):
+        raise ValueError("response must be a JSON object")
+    return value
+
+
+Structured = TypeVar("Structured", bound=BaseModel)
 
 
 class RepoPulseAgent:
@@ -189,17 +202,22 @@ class RepoPulseAgent:
         payload: dict[str, Any],
         *,
         output_limit: int = 512,
+        feedback: str | None = None,
     ) -> str:
         messages = [
             ChatMessage(role="system", content=instruction),
             ChatMessage(role="user", content=json.dumps(payload, ensure_ascii=False)),
         ]
+        if feedback is not None:
+            messages.append(ChatMessage(role="user", content=f"Fix your JSON: {feedback}"))
         # Character-based reservation is an accounting estimate, not a provider token count.
         estimate = max(1, sum(len(message.content) for message in messages) // 4)
         remaining = self.token_budget - state["tokens_used"] - estimate
         if remaining < 1:
             raise BudgetExhausted
-        response = self.provider.complete(messages, max_output_tokens=min(remaining, output_limit))
+        response = self.provider.complete(
+            messages, max_output_tokens=min(remaining, output_limit), json_mode=True
+        )
         used = max(
             estimate + max(1, len(response.text) // 4),
             response.prompt_tokens + response.completion_tokens,
@@ -207,12 +225,36 @@ class RepoPulseAgent:
         state["tokens_used"] += used
         return response.text
 
+    def _structured(
+        self, state: AgentState, stage: str, instruction: str,
+        payload: dict[str, Any], schema: type[Structured], *, output_limit: int = 512,
+    ) -> Structured:
+        """Validate a JSON response, retrying once with the validation error."""
+        feedback: str | None = None
+        for attempt in range(2):
+            raw = self._complete(
+                state, instruction, payload, output_limit=output_limit, feedback=feedback
+            )
+            try:
+                return schema.model_validate(_json_object(raw))
+            except (ValueError, ValidationError) as exc:
+                feedback = str(exc)[:1200]
+                if self.trace is not None:
+                    self.trace.validation_failure(stage, raw, feedback)
+                if attempt == 1:
+                    raise ValidationError.from_exception_data(
+                        schema.__name__, [{"type": "value_error", "loc": (),
+                                           "input": raw, "ctx": {"error": ValueError(feedback)}}]
+                    ) from exc
+        raise AssertionError("unreachable")
+
     def _plan(self, state: AgentState) -> AgentState:
         if state["plan"]:
             state["replans"] += 1
         try:
-            text = self._complete(
+            plan = self._structured(
                 state,
+                "planning",
                 'Return JSON {"subquestions":["..."]}. Plan up to 3 ways to find '
                 "issue, PR or commit evidence.",
                 {
@@ -231,9 +273,8 @@ class RepoPulseAgent:
                             else []
                         )
                     ],
-                },
+                }, Plan,
             )
-            plan = Plan.model_validate(_json_object(text))
             state["plan"] = plan.subquestions
         except BudgetExhausted:
             state["plan"] = [state["question"]]
@@ -254,8 +295,9 @@ class RepoPulseAgent:
             return state
         subquestion = state["plan"][min(len(state["attempted"]), len(state["plan"]) - 1)]
         try:
-            text = self._complete(
+            choice = self._structured(
                 state,
+                "tool_selection",
                 'Return JSON {"tool":"semantic_search","args":{"query":"..."}}. '
                 "Allowed tools: "
                 + ", ".join(sorted(TOOL_NAMES))
@@ -265,9 +307,8 @@ class RepoPulseAgent:
                     "repo": state["repo"],
                     "attempted_tools": state["attempted"],
                     "evidence_urls": [e.url for e in state["evidence"]],
-                },
+                }, ToolChoice,
             )
-            choice = ToolChoice.model_validate(_json_object(text))
         except BudgetExhausted:
             state["decision"] = "stop"
             state["selected"] = None
@@ -337,8 +378,9 @@ class RepoPulseAgent:
             return state
         citable = [e for e in state["evidence"] if e.kind in CITABLE_KINDS]
         try:
-            text = self._complete(
+            parsed = self._structured(
                 state,
+                "evidence_decision",
                 'Return JSON {"action":"continue|enough|replan|stop"}. '
                 "Use replan if evidence is insufficient; enough only when cited "
                 "evidence answers the question.",
@@ -347,9 +389,9 @@ class RepoPulseAgent:
                     "evidence": [e.model_dump() for e in citable[:6]],
                     "limitations": state["limitations"],
                     "replans": state["replans"],
-                },
+                }, Decision,
             )
-            decision = Decision.model_validate(_json_object(text)).action
+            decision = parsed.action
         except BudgetExhausted:
             state["limitations"].append("The token budget cannot fit another LLM call.")
             self._degrade(
@@ -377,10 +419,10 @@ class RepoPulseAgent:
         return {"continue": "select", "replan": "plan"}.get(state["decision"], "synthesize")
 
     def _synthesize(self, state: AgentState) -> AgentState:
-        sources: dict[str, list[Evidence]] = {}
+        sources: dict[str, Evidence] = {}
         for item in state["evidence"]:
             if item.kind in CITABLE_KINDS:
-                sources.setdefault(item.url, []).append(item)
+                sources[item.evidence_id] = item
         answer = Answer(limitations=state["limitations"].copy())
         if state["steps"] >= self.max_steps:
             answer.limitations.append("The maximum tool-step limit was reached.")
@@ -393,14 +435,14 @@ class RepoPulseAgent:
             return self._finish_answer(state, answer)
         synthesis_failed = False
         try:
-            text = self._complete(
+            proposed = self._structured(
                 state,
-                "Return JSON with summary:{text,citations}, key_changes:[{text,citations}], "
-                "risks:[{text,citations}]. Every claim must cite retrieved issue, "
-                "PR or commit URLs. "
-                "Copy claim text exactly from the cited evidence title or excerpt. "
-                "For a summary, copy the shortest relevant title or sentence; the citation "
-                "URL identifies the issue, PR, or commit. Do not paraphrase or invent facts. "
+                "synthesis",
+                "Return JSON with summary:{text,evidence:[{evidence_id,quote}]}, "
+                "key_changes:[{text,evidence:[{evidence_id,quote}]}], and "
+                "risks:[{text,evidence:[{evidence_id,quote}]}]. Claim text may paraphrase, "
+                "but every claim must include a verbatim source quote of at most 30 words "
+                "and the corresponding retrieved evidence_id. "
                 "If no source answers the question, use summary:null and empty lists.",
                 {
                     "question": state["question"],
@@ -410,9 +452,8 @@ class RepoPulseAgent:
                         if e.kind in CITABLE_KINDS
                     ][:8],
                 },
-                output_limit=1024,
+                Answer, output_limit=1024,
             )
-            proposed = Answer.model_validate(_json_object(text))
         except (BudgetExhausted, ProviderError, ValidationError) as exc:
             synthesis_failed = True
             proposed = Answer()
@@ -429,15 +470,14 @@ class RepoPulseAgent:
         def grounded(claim: Claim | None) -> Claim | None:
             if claim is None:
                 return None
-            valid = list(
-                dict.fromkeys(
-                    url
-                    for url in claim.citations
-                    if url in sources
-                    and any(supports_text(claim.text, item) for item in sources[url])
-                )
-            )
-            return Claim(text=claim.text, citations=valid) if valid else None
+            if not all(
+                ref.evidence_id in sources
+                and quote_in_evidence(ref.quote, sources[ref.evidence_id])
+                for ref in claim.evidence
+            ):
+                return None
+            urls = list(dict.fromkeys(sources[ref.evidence_id].url for ref in claim.evidence))
+            return Claim(text=claim.text, evidence=claim.evidence, citations=urls)
 
         answer.summary = grounded(proposed.summary)
         answer.key_changes = [valid for item in proposed.key_changes if (valid := grounded(item))]

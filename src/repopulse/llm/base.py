@@ -38,7 +38,8 @@ class LLMProvider(ABC):
 
     @abstractmethod
     def complete(
-        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None,
+        json_mode: bool = False,
     ) -> LLMResponse:
         """Generate one response from ordered conversation messages."""
 

@@ -42,7 +42,14 @@ def scripted_response(messages: object) -> str:
         return '{"tool":"semantic_search","args":{"query":"ANSI"}}'
     if '"action"' in instruction:
         return '{"action":"enough"}'
-    return json.dumps({"summary": {"text": EVIDENCE.title, "citations": [EVIDENCE.url]}})
+    return json.dumps(
+        {
+            "summary": {
+                "text": EVIDENCE.title,
+                "evidence": [{"evidence_id": EVIDENCE.evidence_id, "quote": EVIDENCE.title}],
+            }
+        }
+    )
 
 
 def test_sqlite_memory_persists_across_store_instances_and_can_be_forgotten(tmp_path: Path) -> None:
@@ -86,9 +93,7 @@ def test_memory_policy_rejects_github_and_unverified_summaries(tmp_path: Path) -
     with pytest.raises(ValueError, match="supported"):
         store.add_verified_summary("A fabricated summary of the issue", [EVIDENCE.url], [EVIDENCE])
     with pytest.raises(ValueError, match="outside"):
-        store.add_verified_summary(
-            EVIDENCE.title, [EVIDENCE.url], [EVIDENCE], repo="other/repo"
-        )
+        store.add_verified_summary(EVIDENCE.title, [EVIDENCE.url], [EVIDENCE], repo="other/repo")
     with pytest.raises(ValueError):
         store.add_user("too short")
     promoted = store.add_verified_summary(EVIDENCE.title, [EVIDENCE.url], [EVIDENCE])

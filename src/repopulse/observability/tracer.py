@@ -1,4 +1,4 @@
-"""Minimal JSONL degradation trace; full run tracing belongs to Phase 7."""
+"""Local JSONL diagnostics; full run tracing belongs to Phase 7."""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +15,16 @@ class DegradationEvent(BaseModel):
     reason: str
 
 
+class ValidationEvent(BaseModel):
+    """A failed model response, kept only in the ignored local trace directory."""
+
+    timestamp: datetime
+    event: str = "validation_failure"
+    stage: str
+    raw_output: str
+    error: str
+
+
 class TraceWriter:
     """Append safe degradation events to one local run trace."""
 
@@ -26,5 +36,14 @@ class TraceWriter:
         """Record why the run used a fallback without storing untrusted content."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         event = DegradationEvent(timestamp=datetime.now(UTC), reason=reason)
+        with self.path.open("a", encoding="utf-8") as output:
+            output.write(event.model_dump_json() + "\n")
+
+    def validation_failure(self, stage: str, raw_output: str, error: str) -> None:
+        """Preserve failed structured output for local diagnosis."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        event = ValidationEvent(
+            timestamp=datetime.now(UTC), stage=stage, raw_output=raw_output, error=error
+        )
         with self.path.open("a", encoding="utf-8") as output:
             output.write(event.model_dump_json() + "\n")

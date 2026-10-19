@@ -100,7 +100,12 @@ def test_tool_retries_with_backoff_then_continues_with_limitation() -> None:
             '{"action":"enough"}',
             json.dumps(
                 {
-                    "summary": {"text": ISSUE["title"], "citations": [EVIDENCE.url]},
+                    "summary": {
+                        "text": ISSUE["title"],
+                        "evidence": [
+                            {"evidence_id": EVIDENCE.evidence_id, "quote": EVIDENCE.title}
+                        ],
+                    },
                     "key_changes": [],
                     "risks": [],
                 }
@@ -122,10 +127,12 @@ def test_tool_retries_with_backoff_then_continues_with_limitation() -> None:
 
 
 def test_retry_cannot_cross_step_cap() -> None:
-    provider = MockProvider([
-        '{"subquestions":["find issue"]}',
-        '{"tool":"semantic_search","args":{"query":"ANSI"}}',
-    ])
+    provider = MockProvider(
+        [
+            '{"subquestions":["find issue"]}',
+            '{"tool":"semantic_search","args":{"query":"ANSI"}}',
+        ]
+    )
     gateway = FakeGateway(failures=99)
     waits: list[float] = []
 
@@ -147,11 +154,26 @@ def test_every_final_claim_cites_retrieved_evidence() -> None:
             '{"action":"enough"}',
             json.dumps(
                 {
-                    "summary": {"text": ISSUE["title"], "citations": [EVIDENCE.url]},
+                    "summary": {
+                        "text": ISSUE["title"],
+                        "evidence": [
+                            {"evidence_id": EVIDENCE.evidence_id, "quote": EVIDENCE.title}
+                        ],
+                    },
                     "key_changes": [
-                        {"text": EVIDENCE.title, "citations": [EVIDENCE.url, bad_url]}
+                        {
+                            "text": EVIDENCE.title,
+                            "evidence": [
+                                {"evidence_id": EVIDENCE.evidence_id, "quote": EVIDENCE.title}
+                            ],
+                        }
                     ],
-                    "risks": [{"text": "uncited", "citations": [bad_url]}],
+                    "risks": [
+                        {
+                            "text": "uncited",
+                            "evidence": [{"evidence_id": bad_url, "quote": "fiction"}],
+                        }
+                    ],
                 }
             ),
         ]
@@ -190,7 +212,14 @@ def test_claim_requires_support_from_its_own_citation() -> None:
             '{"subquestions":["find ANSI color issue"]}',
             '{"tool":"semantic_search","args":{"query":"ANSI color"}}',
             '{"action":"enough"}',
-            json.dumps({"summary": {"text": EVIDENCE.title, "citations": [wrong.url]}}),
+            json.dumps(
+                {
+                    "summary": {
+                        "text": EVIDENCE.title,
+                        "evidence": [{"evidence_id": wrong.evidence_id, "quote": EVIDENCE.title}],
+                    }
+                }
+            ),
         ]
     )
     answer = asyncio.run(
@@ -218,6 +247,84 @@ def test_llm_fallback_marks_answer_degraded_and_traces_reason(tmp_path: Path) ->
     assert any("HTTP 404" in reason for reason in answer.degradation_reasons)
     events = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
     assert any(
-        event["event"] == "degradation" and "HTTP 404" in event["reason"]
-        for event in events
+        event["event"] == "degradation" and "HTTP 404" in event["reason"] for event in events
     )
+
+
+def test_paraphrased_claim_with_valid_quote_passes() -> None:
+    provider = MockProvider(
+        [
+            '{"subquestions":["find ANSI issue"]}',
+            '{"tool":"semantic_search","args":{"query":"ANSI"}}',
+            '{"action":"enough"}',
+            json.dumps(
+                {
+                    "summary": {
+                        "text": "The report concerned how Click handled ANSI colors.",
+                        "evidence": [
+                            {"evidence_id": EVIDENCE.evidence_id, "quote": EVIDENCE.title}
+                        ],
+                    }
+                }
+            ),
+        ]
+    )
+    answer = run(RepoPulseAgent(provider, FakeGateway()))
+    assert answer.summary is not None
+    assert answer.summary.text != EVIDENCE.title
+    assert answer.summary.citations == [EVIDENCE.url]
+
+
+def test_fabricated_quote_fails() -> None:
+    provider = MockProvider(
+        [
+            '{"subquestions":["find ANSI issue"]}',
+            '{"tool":"semantic_search","args":{"query":"ANSI"}}',
+            '{"action":"enough"}',
+            json.dumps(
+                {
+                    "summary": {
+                        "text": "An invented claim.",
+                        "evidence": [
+                            {
+                                "evidence_id": EVIDENCE.evidence_id,
+                                "quote": "This fabricated sentence is not in the issue.",
+                            }
+                        ],
+                    }
+                }
+            ),
+        ]
+    )
+    answer = run(RepoPulseAgent(provider, FakeGateway()))
+    assert answer.summary is None
+    assert answer.degraded
+
+
+def test_planner_retries_validation_with_error_and_traces_raw(tmp_path: Path) -> None:
+    trace = TraceWriter(tmp_path / "traces")
+    provider = MockProvider(
+        [
+            '```json\n{"subquestions":[]}\n```',
+            '```json\n{"subquestions":["find ANSI issue"]}\n```',
+            '{"tool":"semantic_search","args":{"query":"ANSI"}}',
+            '{"action":"enough"}',
+            json.dumps(
+                {
+                    "summary": {
+                        "text": "ANSI issue reported",
+                        "evidence": [
+                            {"evidence_id": EVIDENCE.evidence_id, "quote": EVIDENCE.title}
+                        ],
+                    }
+                }
+            ),
+        ]
+    )
+    answer = run(RepoPulseAgent(provider, FakeGateway(), trace=trace))
+    assert answer.summary is not None
+    assert not any("Planning" in reason for reason in answer.degradation_reasons)
+    assert "Fix your JSON" in provider.calls[1][-1].content
+    events = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
+    assert events[0]["stage"] == "planning"
+    assert events[0]["raw_output"].startswith("```json")

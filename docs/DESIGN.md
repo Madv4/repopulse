@@ -96,7 +96,7 @@ Sources: [repository issue comments](https://docs.github.com/en/rest/issues/comm
 
 ## Follow-up after Phase 3
 
-The earlier issue-identification filter counted words shared with the question. That could accept an unrelated source, and it applied only to one question shape. The replacement is general and deliberately conservative: after Unicode and whitespace normalization, a retained claim's full text must occur in the title or excerpt of **each** retained citation. A URL alone never establishes support. The LLM is asked to copy source wording; unsupported paraphrases are dropped. If none survive, no answer claim is issued and the result is marked degraded. This extracts only explicit evidence and does not attempt semantic entailment; broader paraphrase verification remains for Phase 5.
+The final-answer verifier requires each free-form claim to name retrieved evidence ID(s) and a verbatim quote span of at most 30 words for each ID. It checks quote membership in the exact retrieved title or excerpt and resolves citation URLs from those IDs; invalid claims are removed. This permits paraphrasing, but quote membership alone cannot establish semantic entailment. Memory summary promotion retains its stricter full-text rule.
 
 An LLM planning, selection, decision, or synthesis fallback sets `degraded` and records safe reasons in the answer. The CLI prints a `DEGRADED` line and writes those reasons, without prompts or source text, to a local JSONL trace under ignored `traces/`. Full run tracing remains a Phase 7 task. `doctor --live` makes a single completion request to the selected model; success checks that the provider accepts the configured model name. The ordinary `doctor` makes no request.
 

@@ -32,7 +32,8 @@ class GeminiProvider(LLMProvider):
         return "gemini"
 
     def complete(
-        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None,
+        json_mode: bool = False,
     ) -> LLMResponse:
         """Request Gemini text generation with system instructions separated."""
         system = "\n\n".join(message.content for message in messages if message.role == "system")
@@ -49,8 +50,13 @@ class GeminiProvider(LLMProvider):
         payload: dict[str, object] = {"contents": contents}
         if system:
             payload["systemInstruction"] = {"parts": [{"text": system}]}
+        generation_config: dict[str, object] = {}
         if max_output_tokens is not None:
-            payload["generationConfig"] = {"maxOutputTokens": max_output_tokens}
+            generation_config["maxOutputTokens"] = max_output_tokens
+        if json_mode:
+            generation_config["responseMimeType"] = "application/json"
+        if generation_config:
+            payload["generationConfig"] = generation_config
         data = post_json(
             self.client,
             f"https://generativelanguage.googleapis.com/v1beta/models/"

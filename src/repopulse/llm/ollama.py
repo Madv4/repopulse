@@ -29,7 +29,8 @@ class OllamaProvider(LLMProvider):
         return "ollama"
 
     def complete(
-        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None,
+        json_mode: bool = False,
     ) -> LLMResponse:
         """Request a non-streaming Ollama completion."""
         payload: dict[str, object] = {
@@ -39,6 +40,8 @@ class OllamaProvider(LLMProvider):
         }
         if max_output_tokens is not None:
             payload["options"] = {"num_predict": max_output_tokens}
+        if json_mode:
+            payload["format"] = "json"
         data = post_json(
             self.client,
             f"{self.base_url}/api/chat",

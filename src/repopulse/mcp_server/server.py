@@ -1,10 +1,11 @@
 """Read-only MCP tools for GitHub and locally indexed repository evidence."""
 
 from collections.abc import Callable
+from hashlib import sha256
 from typing import Any, Protocol
 
 from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from repopulse.config import Settings
 from repopulse.github.client import GitHubClient
@@ -39,6 +40,13 @@ class Evidence(BaseModel):
     kind: str
     title: str
     excerpt: str = Field(max_length=1800)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def evidence_id(self) -> str:
+        """Stable ID for exactly this retrieved passage, not merely its URL."""
+        source = "\x00".join((self.url, self.kind, self.title, self.excerpt))
+        return sha256(source.encode("utf-8")).hexdigest()[:20]
 
 
 class ToolEvidence(BaseModel):

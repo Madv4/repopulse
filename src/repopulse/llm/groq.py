@@ -31,7 +31,8 @@ class GroqProvider(LLMProvider):
         return "groq"
 
     def complete(
-        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None,
+        json_mode: bool = False,
     ) -> LLMResponse:
         """Request a Groq chat completion."""
         payload: dict[str, object] = {
@@ -40,6 +41,8 @@ class GroqProvider(LLMProvider):
         }
         if max_output_tokens is not None:
             payload["max_completion_tokens"] = max_output_tokens
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
         data = post_json(
             self.client,
             "https://api.groq.com/openai/v1/chat/completions",

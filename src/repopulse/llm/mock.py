@@ -26,7 +26,8 @@ class MockProvider(LLMProvider):
         return "mock"
 
     def complete(
-        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None,
+        json_mode: bool = False,
     ) -> LLMResponse:
         """Return a deterministic scripted completion without network access."""
         call = tuple(messages)
