@@ -93,3 +93,9 @@ A live `pallets/click` ingest exhausted GitHub's unauthenticated hourly quota wh
 The CLI now prints a rate-limit recovery instruction instead of a traceback. The optional `GITHUB_TOKEN` is a GitHub credential independent of the LLM provider key; no paid service is required. A run that still exceeds the quota fails before any Chroma writes, so it cannot report a partial ingest as complete.
 
 Sources: [repository issue comments](https://docs.github.com/en/rest/issues/comments), [repository PR review comments](https://docs.github.com/en/rest/pulls/comments), [GitHub REST rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
+
+## Follow-up after Phase 3
+
+The earlier issue-identification filter counted words shared with the question. That could accept an unrelated source, and it applied only to one question shape. The replacement is general and deliberately conservative: after Unicode and whitespace normalization, a retained claim's full text must occur in the title or excerpt of **each** retained citation. A URL alone never establishes support. The LLM is asked to copy source wording; unsupported paraphrases are dropped. If none survive, a retrieved title is used and the answer is marked degraded. This extracts only explicit evidence and does not attempt semantic entailment; broader paraphrase verification remains for Phase 5.
+
+An LLM planning, selection, decision, or synthesis fallback sets `degraded` and records safe reasons in the answer. The CLI prints a `DEGRADED` line and writes those reasons, without prompts or source text, to a local JSONL trace under ignored `traces/`. Full run tracing remains a Phase 7 task. `doctor --live` makes a single completion request to the selected model; success checks that the provider accepts the configured model name. The ordinary `doctor` makes no request.

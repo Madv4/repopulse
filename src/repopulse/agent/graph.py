@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+import unicodedata
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal, Protocol, TypedDict
 
@@ -12,6 +13,7 @@ from pydantic import BaseModel, Field, ValidationError
 from repopulse.github.client import GitHubClient
 from repopulse.llm.base import ChatMessage, LLMProvider, ProviderError
 from repopulse.mcp_server import Evidence, ToolEvidence
+from repopulse.observability.tracer import TraceWriter
 
 TOOL_NAMES = frozenset(
     {
@@ -26,9 +28,6 @@ TOOL_NAMES = frozenset(
     }
 )
 CITABLE_KINDS = frozenset({"issue", "pull_request", "commit"})
-ISSUE_QUESTION_STOPWORDS = frozenset(
-    {"which", "what", "issue", "reported", "report", "about", "handling", "the", "and", "for"}
-)
 
 
 class Claim(BaseModel):
@@ -45,6 +44,9 @@ class Answer(BaseModel):
     key_changes: list[Claim] = Field(default_factory=list)
     risks: list[Claim] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+    degraded: bool = False
+    degradation_reasons: list[str] = Field(default_factory=list)
+    trace_id: str | None = None
 
 
 class ToolChoice(BaseModel):
@@ -88,6 +90,7 @@ class AgentState(TypedDict):
     selected: ToolChoice | None
     evidence: list[Evidence]
     limitations: list[str]
+    degradation_reasons: list[str]
     attempted: list[str]
     steps: int
     replans: int
@@ -108,24 +111,16 @@ def _json_object(text: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _citable_for_question(question: str, evidence: list[Evidence]) -> list[Evidence]:
-    citable = [item for item in evidence if item.kind in CITABLE_KINDS]
-    if re.search(r"\b(?:which|what) issue\b", question, re.IGNORECASE) is None:
-        return citable
-    terms = {
-        term
-        for term in re.findall(r"[a-z0-9]+", question.lower())
-        if len(term) > 2 and term not in ISSUE_QUESTION_STOPWORDS
-    }
-    if not terms:
-        return [item for item in citable if item.kind == "issue"]
-    threshold = min(2, len(terms))
-    return [
-        item
-        for item in citable
-        if item.kind == "issue"
-        and sum(term in (item.title + " " + item.excerpt).lower() for term in terms) >= threshold
-    ]
+def _normalized(text: str) -> str:
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", text)).strip().casefold()
+
+
+def _supports_claim(claim: Claim, evidence: Evidence) -> bool:
+    """A citation supports only text copied from its retrieved title or passage."""
+    wanted = _normalized(claim.text)
+    return bool(wanted) and any(
+        wanted in _normalized(source) for source in (evidence.title, evidence.excerpt)
+    )
 
 
 class RepoPulseAgent:
@@ -141,6 +136,7 @@ class RepoPulseAgent:
         max_replans: int = 3,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         progress: Callable[[str], None] | None = None,
+        trace: TraceWriter | None = None,
     ) -> None:
         if max_steps < 1 or token_budget < 1 or max_replans < 0:
             raise ValueError("agent limits must be positive (max_replans may be zero)")
@@ -151,6 +147,7 @@ class RepoPulseAgent:
         self.max_replans = max_replans
         self.sleep = sleep
         self.progress = progress
+        self.trace = trace
         graph = StateGraph(AgentState)
         graph.add_node("plan", self._plan)
         graph.add_node("select", self._select)
@@ -172,6 +169,25 @@ class RepoPulseAgent:
         )
         graph.add_edge("synthesize", END)
         self.graph = graph.compile()
+
+    def _degrade(self, state: AgentState, reason: str) -> None:
+        if reason not in state["degradation_reasons"]:
+            state["degradation_reasons"].append(reason)
+            if self.trace is not None:
+                self.trace.degradation(reason)
+
+    @staticmethod
+    def _provider_failure(stage: str, exc: ProviderError) -> str:
+        status = re.search(r"HTTP \d{3}", str(exc))
+        detail = status.group() if status else type(exc).__name__
+        return f"{stage} LLM request failed: {detail}."
+
+    def _finish_answer(self, state: AgentState, answer: Answer) -> AgentState:
+        answer.degradation_reasons = state["degradation_reasons"].copy()
+        answer.degraded = bool(answer.degradation_reasons)
+        answer.trace_id = self.trace.run_id if answer.degraded and self.trace else None
+        state["answer"] = answer
+        return state
 
     def _complete(
         self,
@@ -219,10 +235,13 @@ class RepoPulseAgent:
             state["plan"] = [state["question"]]
             state["decision"] = "stop"
             state["limitations"].append("The token budget cannot fit another LLM call.")
-        except (ProviderError, ValidationError):
+            self._degrade(state, "Planning LLM skipped because the token budget was exhausted.")
+        except ProviderError as exc:
             state["plan"] = [state["question"]]
-            if state["tokens_used"] >= self.token_budget:
-                state["decision"] = "stop"
+            self._degrade(state, self._provider_failure("Planning", exc))
+        except ValidationError:
+            state["plan"] = [state["question"]]
+            self._degrade(state, "Planning LLM returned invalid structured output.")
         return state
 
     def _select(self, state: AgentState) -> AgentState:
@@ -249,8 +268,15 @@ class RepoPulseAgent:
             state["decision"] = "stop"
             state["selected"] = None
             state["limitations"].append("The token budget cannot fit another LLM call.")
+            self._degrade(
+                state, "Tool-selection LLM skipped because the token budget was exhausted."
+            )
             return state
-        except (ProviderError, ValidationError):
+        except ProviderError as exc:
+            self._degrade(state, self._provider_failure("Tool-selection", exc))
+            choice = ToolChoice(tool="semantic_search", args={"query": subquestion})
+        except ValidationError:
+            self._degrade(state, "Tool-selection LLM returned invalid structured output.")
             choice = ToolChoice(tool="semantic_search", args={"query": subquestion})
         choice.args["repo"] = state["repo"]
         state["selected"] = choice
@@ -305,7 +331,7 @@ class RepoPulseAgent:
         if state["steps"] >= self.max_steps or state["tokens_used"] >= self.token_budget:
             state["decision"] = "stop"
             return state
-        citable = _citable_for_question(state["question"], state["evidence"])
+        citable = [e for e in state["evidence"] if e.kind in CITABLE_KINDS]
         try:
             text = self._complete(
                 state,
@@ -322,8 +348,15 @@ class RepoPulseAgent:
             decision = Decision.model_validate(_json_object(text)).action
         except BudgetExhausted:
             state["limitations"].append("The token budget cannot fit another LLM call.")
+            self._degrade(
+                state, "Evidence-decision LLM skipped because the token budget was exhausted."
+            )
             decision = "stop"
-        except (ProviderError, ValidationError):
+        except ProviderError as exc:
+            self._degrade(state, self._provider_failure("Evidence-decision", exc))
+            decision = "enough" if citable else "replan"
+        except ValidationError:
+            self._degrade(state, "Evidence-decision LLM returned invalid structured output.")
             decision = "enough" if citable else "replan"
         if not citable and decision == "enough":
             decision = "replan"
@@ -340,9 +373,10 @@ class RepoPulseAgent:
         return {"continue": "select", "replan": "plan"}.get(state["decision"], "synthesize")
 
     def _synthesize(self, state: AgentState) -> AgentState:
-        sources = {
-            e.url: e for e in _citable_for_question(state["question"], state["evidence"])
-        }
+        sources: dict[str, list[Evidence]] = {}
+        for item in state["evidence"]:
+            if item.kind in CITABLE_KINDS:
+                sources.setdefault(item.url, []).append(item)
         answer = Answer(limitations=state["limitations"].copy())
         if state["steps"] >= self.max_steps:
             answer.limitations.append("The maximum tool-step limit was reached.")
@@ -350,50 +384,68 @@ class RepoPulseAgent:
             answer.limitations.append("The token budget was exhausted.")
         if not sources:
             answer.limitations.append(
-                "No citable issue, pull request or commit evidence matched the question."
+                "No citable issue, pull request or commit evidence was retrieved."
             )
-            state["answer"] = answer
-            return state
+            return self._finish_answer(state, answer)
         try:
             text = self._complete(
                 state,
                 "Return JSON with summary:{text,citations}, key_changes:[{text,citations}], "
                 "risks:[{text,citations}]. Every claim must cite retrieved issue, "
                 "PR or commit URLs. "
-                "Do not invent facts. Omit unsupported claims.",
+                "Copy claim text exactly from the cited evidence title or excerpt. "
+                "Do not paraphrase or invent facts. Omit unsupported claims.",
                 {
                     "question": state["question"],
-                    "evidence": [e.model_dump() for e in list(sources.values())[:8]],
+                    "evidence": [
+                        e.model_dump()
+                        for e in state["evidence"]
+                        if e.kind in CITABLE_KINDS
+                    ][:8],
                 },
                 output_limit=1024,
             )
             proposed = Answer.model_validate(_json_object(text))
-        except (BudgetExhausted, ProviderError, ValidationError):
-            first = next(iter(sources.values()))
+        except (BudgetExhausted, ProviderError, ValidationError) as exc:
+            first = next(iter(sources.values()))[0]
             proposed = Answer(summary=Claim(text=first.title, citations=[first.url]))
             answer.limitations.append(
                 "LLM synthesis was unavailable; summary uses a retrieved title."
             )
+            reason = (
+                self._provider_failure("Synthesis", exc)
+                if isinstance(exc, ProviderError)
+                else "Synthesis LLM returned invalid structured output."
+                if isinstance(exc, ValidationError)
+                else "Synthesis LLM skipped because the token budget was exhausted."
+            )
+            self._degrade(state, reason)
 
         def grounded(claim: Claim | None) -> Claim | None:
             if claim is None:
                 return None
-            valid = list(dict.fromkeys(url for url in claim.citations if url in sources))
+            valid = list(
+                dict.fromkeys(
+                    url
+                    for url in claim.citations
+                    if url in sources and any(_supports_claim(claim, item) for item in sources[url])
+                )
+            )
             return Claim(text=claim.text, citations=valid) if valid else None
 
         answer.summary = grounded(proposed.summary)
         answer.key_changes = [valid for item in proposed.key_changes if (valid := grounded(item))]
         answer.risks = [valid for item in proposed.risks if (valid := grounded(item))]
         if answer.summary is None and not answer.key_changes and not answer.risks:
-            first = next(iter(sources.values()))
+            first = next(iter(sources.values()))[0]
             answer.summary = Claim(text=first.title, citations=[first.url])
             answer.limitations.append(
-                "No grounded LLM claims were returned; summary uses a retrieved title."
+                "No supported LLM claims were returned; summary uses a retrieved title."
             )
+            self._degrade(state, "Synthesis claims were unsupported by their cited evidence.")
         if proposed.summary is not None and answer.summary is None:
             answer.limitations.append("An uncited summary was removed.")
-        state["answer"] = answer
-        return state
+        return self._finish_answer(state, answer)
 
     async def ask(self, question: str, repo: str) -> Answer:
         """Run one bounded graph and return a validated, citation-bearing answer."""
@@ -407,6 +459,7 @@ class RepoPulseAgent:
             "selected": None,
             "evidence": [],
             "limitations": [],
+            "degradation_reasons": [],
             "attempted": [],
             "steps": 0,
             "replans": 0,

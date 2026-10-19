@@ -8,6 +8,7 @@ from repopulse.agent import RepoPulseAgent
 from repopulse.llm.base import LLMResponse
 from repopulse.llm.mock import MockProvider
 from repopulse.mcp_server import Evidence, ToolEvidence
+from repopulse.observability.tracer import TraceWriter
 
 FIXTURE = Path(__file__).resolve().parents[1] / "evals/fixtures/click_snapshot.json"
 ISSUE = next(
@@ -147,7 +148,9 @@ def test_every_final_claim_cites_retrieved_evidence() -> None:
             json.dumps(
                 {
                     "summary": {"text": ISSUE["title"], "citations": [EVIDENCE.url]},
-                    "key_changes": [{"text": "cited", "citations": [EVIDENCE.url, bad_url]}],
+                    "key_changes": [
+                        {"text": EVIDENCE.title, "citations": [EVIDENCE.url, bad_url]}
+                    ],
                     "risks": [{"text": "uncited", "citations": [bad_url]}],
                 }
             ),
@@ -165,7 +168,7 @@ def test_default_mock_still_works_offline() -> None:
     assert answer.summary.citations == [EVIDENCE.url]
 
 
-def test_issue_identity_rejects_an_unrelated_issue_citation() -> None:
+def test_claim_requires_support_from_its_own_citation() -> None:
     unrelated = next(
         row
         for row in json.loads(FIXTURE.read_text(encoding="utf-8"))["issues"]
@@ -180,14 +183,14 @@ def test_issue_identity_rejects_an_unrelated_issue_citation() -> None:
 
     class MixedGateway(FakeGateway):
         async def call(self, name: str, arguments: dict[str, str | int]) -> ToolEvidence:
-            return ToolEvidence(evidence=[wrong, EVIDENCE])
+            return ToolEvidence(evidence=[EVIDENCE, wrong])
 
     provider = MockProvider(
         [
             '{"subquestions":["find ANSI color issue"]}',
             '{"tool":"semantic_search","args":{"query":"ANSI color"}}',
             '{"action":"enough"}',
-            json.dumps({"summary": {"text": "Wrong issue", "citations": [wrong.url]}}),
+            json.dumps({"summary": {"text": EVIDENCE.title, "citations": [wrong.url]}}),
         ]
     )
     answer = asyncio.run(
@@ -198,3 +201,24 @@ def test_issue_identity_rejects_an_unrelated_issue_citation() -> None:
     assert answer.summary is not None
     assert answer.summary.citations == [EVIDENCE.url]
     assert answer.summary.text == EVIDENCE.title
+    assert answer.degraded
+
+
+def test_llm_fallback_marks_answer_degraded_and_traces_reason(tmp_path: Path) -> None:
+    from repopulse.llm.base import ProviderError
+
+    def fail(_messages: object) -> str:
+        raise ProviderError("LLM service returned HTTP 404")
+
+    trace = TraceWriter(tmp_path / "traces")
+    answer = run(
+        RepoPulseAgent(MockProvider(responder=fail), FakeGateway(), max_steps=1, trace=trace)
+    )
+    assert answer.degraded is True
+    assert answer.trace_id == trace.run_id
+    assert any("HTTP 404" in reason for reason in answer.degradation_reasons)
+    events = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
+    assert any(
+        event["event"] == "degradation" and "HTTP 404" in event["reason"]
+        for event in events
+    )
