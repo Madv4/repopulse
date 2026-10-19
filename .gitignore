@@ -1,0 +1,14 @@
+.venv/
+.env
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.repopulse/
+traces/
+evals/reports/*.json
+evals/reports/latest.md
