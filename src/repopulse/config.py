@@ -25,3 +25,9 @@ class Settings(BaseSettings):
     github_cache_ttl_seconds: int = Field(default=300, ge=0)
     github_timeout_seconds: float = Field(default=15, gt=0)
     github_max_retries: int = Field(default=2, ge=0, le=5)
+    model_cache_dir: Path = Path(".repopulse/models")
+    chroma_dir: Path = Path(".repopulse/chroma")
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_revision: str = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L6-v2"
+    reranker_revision: str = "233902d25c440f23af6f7d6e94d2946bac0bee0a"

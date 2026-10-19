@@ -26,7 +26,7 @@ The Phase 1 runtime depends only on `httpx`, `pydantic`, and `pydantic-settings`
 
 Plain Python is the clearer fit for configuration, provider adapters, and HTTP transport: these operations are single calls with no branching agent state to orchestrate. LangGraph enters in Phase 3 for the plan, tool, observe, and replan loop, where explicit state transitions matter.
 
-No embedding, vector-store, LangGraph, MCP, tracing, or CI dependencies are installed yet. They enter in the corresponding phases to keep each step reviewable and avoid imposing large downloads during foundation setup. The future embedding model is local `all-MiniLM-L6-v2`, with persistent ChromaDB and SQLite as specified in the project brief.
+The Phase 1 commit installed no embedding, vector-store, LangGraph, MCP, tracing, or CI dependencies. They enter in their corresponding phases. Phase 2 adds local MiniLM and ChromaDB; SQLite memory remains for Phase 4.
 
 ### Sources checked
 
@@ -35,3 +35,32 @@ No embedding, vector-store, LangGraph, MCP, tracing, or CI dependencies are inst
 - [GitHub conditional request guidance](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api)
 - [Groq chat completions API](https://console.groq.com/docs/api-reference)
 - [Gemini generateContent API](https://ai.google.dev/gemini-api/docs/generate-content)
+
+## Phase 2
+
+### Source normalization and date windows
+
+`RepositoryIngestor` reads GitHub's issue listing (which includes PR summaries), PR details, issue discussion comments, PR line review comments, and commits. It selects records with creation, update, close, or merge timestamps inside a half-open UTC window and includes comments created in that window. The live endpoint's `since` filter selects records updated after the start date. This avoids retrieving the entire repository for common recent windows, but a long or very active window can still hit the client's explicit pagination cap. GitHub's current issue body is not a historical reconstruction of its state at the window end; a future timeline-based snapshot would be needed for that. The fixture evaluation avoids this drift by using a committed capture.
+
+All sources become a `SourceDocument` with canonical ID, URL, title, body, author, dates, labels and comments. Each chunk keeps its parent issue, PR or commit URL and metadata. Comment text stays distinguishable by author and comment URL in the passage, even though the parent URL is the primary citation key.
+
+### Chunking and local search
+
+`FixedChunker` uses 500-character windows with 80-character overlap. `StructureChunker` packs Markdown paragraphs, headings, and whole comment blocks up to 500 characters, only slicing oversized blocks. Both implement the same `Chunker` interface. ChromaDB has a separate persistent collection per strategy. Metadata includes source type, number, URL, author, created and updated dates, labels, source ID, repo, strategy and chunk index. Chroma metadata does not store arrays directly, so labels are JSON-encoded. Reingestion replaces chunks belonging to one source.
+
+The embedder is explicitly local `sentence-transformers/all-MiniLM-L6-v2`, with vectors supplied to ChromaDB. Chroma's default embedding function is never invoked. The optional cross-encoder is `cross-encoder/ms-marco-MiniLM-L6-v2`; it scores query/passage pairs after vector retrieval. Retrieval deduplicates by source document so long issues do not occupy every returned rank. The current candidate pool has a fixed bound; for very long corpora it can return fewer than `k` distinct sources, a known limitation.
+
+`make setup` downloads both public model weight sets once into `.repopulse/models`. The configured Hugging Face revisions are pinned to the actual downloaded snapshots, and the evaluation report records both hashes. Runtime inference and `make eval` request cached files only and fail with a clear `make models` instruction when weights are absent. Unit tests inject a deterministic tiny embedder and reranker, so they never download a model or contact GitHub. The recorded retrieval fixture has selected real `pallets/click` REST fields; no fixture text is sent to a hosted service.
+
+The NumPy dependency is capped below 2.5 because the 2.5.4 stubs use syntax mypy rejected under the project's Python 3.11 type-check target. Mypy checks all project source and evaluation code strictly while skipping deep traversal into the large Torch, Transformers, NumPy and Chroma dependency trees.
+
+Plain Python remains the fit for ingestion, chunking, and retrieval because these are deterministic data transformations. LangGraph is reserved for the branching agent loop in Phase 3.
+
+### Sources checked
+
+- [Chroma persistent client](https://docs.trychroma.com/reference/python)
+- [SentenceTransformer model loading and local-only mode](https://www.sbert.net/docs/package_reference/sentence_transformer/model.html)
+- [CrossEncoder model loading and local-only mode](https://www.sbert.net/docs/package_reference/cross_encoder/model.html)
+- [GitHub issue REST API](https://docs.github.com/en/rest/issues/issues)
+- [GitHub issue comments](https://docs.github.com/en/rest/issues/comments)
+- [GitHub PR review comments](https://docs.github.com/en/rest/pulls/comments)

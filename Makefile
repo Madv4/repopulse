@@ -6,12 +6,16 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 endif
 
-.PHONY: setup test lint typecheck eval demo
+.PHONY: setup models test lint typecheck eval demo
 
 setup:
 	$(PYTHON) -m venv .venv
 	$(VENV_PYTHON) -m pip install --upgrade pip
 	$(VENV_PYTHON) -m pip install -e ".[dev]"
+	$(VENV_PYTHON) -m repopulse.cli models prepare
+
+models:
+	$(VENV_PYTHON) -m repopulse.cli models prepare
 
 test:
 	$(VENV_PYTHON) -m pytest
@@ -20,10 +24,10 @@ lint:
 	$(VENV_PYTHON) -m ruff check .
 
 typecheck:
-	$(VENV_PYTHON) -m mypy src
+	$(VENV_PYTHON) -m mypy src evals
 
 eval:
-	@echo "Evaluation suite is scheduled for Phase 6."
+	$(VENV_PYTHON) -m evals.run_retrieval
 
 demo:
 	@echo "Scripted demo is scheduled for Phase 8."

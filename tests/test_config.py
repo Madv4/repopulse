@@ -21,12 +21,14 @@ def test_provider_selection_and_missing_keys() -> None:
         create_provider(Settings(_env_file=None, llm_provider="groq"))
     with pytest.raises(ProviderError, match="GEMINI_API_KEY"):
         create_provider(Settings(_env_file=None, llm_provider="gemini"))
-    assert create_provider(
-        Settings(_env_file=None, llm_provider="groq", groq_api_key="fake")
-    ).name == "groq"
-    assert create_provider(
-        Settings(_env_file=None, llm_provider="gemini", gemini_api_key="fake")
-    ).name == "gemini"
+    assert (
+        create_provider(Settings(_env_file=None, llm_provider="groq", groq_api_key="fake")).name
+        == "groq"
+    )
+    assert (
+        create_provider(Settings(_env_file=None, llm_provider="gemini", gemini_api_key="fake")).name
+        == "gemini"
+    )
 
 
 def test_invalid_settings_and_secrets() -> None:

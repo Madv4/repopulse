@@ -108,7 +108,7 @@ class GitHubClient:
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "RepoPulse/0.1",
+            "User-Agent": "RepoPulse/0.2",
         }
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
@@ -131,11 +131,15 @@ class GitHubClient:
                 cached.fetched_at = self._clock()
                 self._cache.write(url, cached)
                 return GitHubResponse(data=cached.data, link=cached.link, from_cache=True)
-            if response.status_code == 429 or response.status_code == 403 and (
-                response.headers.get("x-ratelimit-remaining") == "0"
-                or "retry-after" in response.headers
-                or "rate limit" in response.text.lower()
-                or "abuse" in response.text.lower()
+            if (
+                response.status_code == 429
+                or response.status_code == 403
+                and (
+                    response.headers.get("x-ratelimit-remaining") == "0"
+                    or "retry-after" in response.headers
+                    or "rate limit" in response.text.lower()
+                    or "abuse" in response.text.lower()
+                )
             ):
                 raise GitHubRateLimitError(self._retry_after(response.headers))
             if response.status_code == 404:
@@ -222,3 +226,35 @@ class GitHubClient:
     def list_releases(self, repo: str) -> list[dict[str, Any]]:
         """List repository releases."""
         return self.get_paginated(f"{self.repo_path(repo)}/releases", {"per_page": 100})
+
+    def list_issues_since(self, repo: str, since: str) -> list[dict[str, Any]]:
+        """List issues and PR summaries updated since an ISO 8601 timestamp."""
+        return self.get_paginated(
+            f"{self.repo_path(repo)}/issues",
+            {
+                "state": "all",
+                "since": since,
+                "sort": "updated",
+                "direction": "asc",
+                "per_page": 100,
+            },
+        )
+
+    def list_issue_comments(self, repo: str, number: int) -> list[dict[str, Any]]:
+        """List issue comments, which also covers general PR discussion."""
+        return self.get_paginated(
+            f"{self.repo_path(repo)}/issues/{number}/comments", {"per_page": 100}
+        )
+
+    def list_pr_review_comments(self, repo: str, number: int) -> list[dict[str, Any]]:
+        """List line-level review comments on a pull request."""
+        return self.get_paginated(
+            f"{self.repo_path(repo)}/pulls/{number}/comments", {"per_page": 100}
+        )
+
+    def list_commits_between(self, repo: str, since: str, until: str) -> list[dict[str, Any]]:
+        """List commits whose GitHub timestamp lies in the requested window."""
+        return self.get_paginated(
+            f"{self.repo_path(repo)}/commits",
+            {"since": since, "until": until, "per_page": 100},
+        )

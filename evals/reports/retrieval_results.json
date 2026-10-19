@@ -1,0 +1,895 @@
+{
+  "fixture_sha256": "3d39ff0c6a8ada85bdd0c0145b7ab8f0cf99f3c73996f15046617918156113d7",
+  "dataset_sha256": "4048d186ef6c76ac6c2bd4e0c546906513a7bb88aaec3a468483ef225be1c5ac",
+  "captured_at": "2026-10-19T06:26:22.403901+00:00",
+  "repo": "pallets/click",
+  "case_count": 21,
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+  "reranker_revision": "233902d25c440f23af6f7d6e94d2946bac0bee0a",
+  "chromadb_version": "1.5.9",
+  "sentence_transformers_version": "6.1.0",
+  "variants": [
+    {
+      "strategy": "fixed",
+      "rerank": false,
+      "documents": 20,
+      "chunks": 85,
+      "hit_rate_at_3": 1.0,
+      "mrr_at_3": 1.0,
+      "cases": [
+        {
+          "case_id": "ansi-style",
+          "urls": [
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/issues/3886"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "less-interrupt",
+          "urls": [
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/issues/3885",
+            "https://github.com/pallets/click/issues/3840"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "completion-callback",
+          "urls": [
+            "https://github.com/pallets/click/issues/3885",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/pull/3866"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "show-envvar",
+          "urls": [
+            "https://github.com/pallets/click/pull/3884",
+            "https://github.com/pallets/click/pull/3865",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "man-page",
+          "urls": [
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "windows-shell-split",
+          "urls": [
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/pull/3878"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "control-bytes",
+          "urls": [
+            "https://github.com/pallets/click/pull/3878",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "parameter-spec",
+          "urls": [
+            "https://github.com/pallets/click/commit/2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+            "https://github.com/pallets/click/commit/9f0bcdf0d868edfc71435cd0aac2dcc08cf94828",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "parameter-names",
+          "urls": [
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/06b2a678741131fd577ce170e23e5ca0aeba0309",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "short-help",
+          "urls": [
+            "https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3",
+            "https://github.com/pallets/click/pull/3865",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "private-utilities",
+          "urls": [
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "edit-winerror",
+          "urls": [
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "start-release",
+          "urls": [
+            "https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "positional-arguments",
+          "urls": [
+            "https://github.com/pallets/click/commit/bb695aaecdef95832d167fc1d508921745aa824e",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "merge-stable",
+          "urls": [
+            "https://github.com/pallets/click/commit/3cbaa76b6014be7427d1ab06b4af40f01e7c278e",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "advanced-ui-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "pager-signal-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "custom-help-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/pull/3865"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "customization-point",
+          "urls": [
+            "https://github.com/pallets/click/pull/3878",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "open-file-public",
+          "urls": [
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3880"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "notepad-alias",
+          "urls": [
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        }
+      ]
+    },
+    {
+      "strategy": "fixed",
+      "rerank": true,
+      "documents": 20,
+      "chunks": 85,
+      "hit_rate_at_3": 1.0,
+      "mrr_at_3": 1.0,
+      "cases": [
+        {
+          "case_id": "ansi-style",
+          "urls": [
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "less-interrupt",
+          "urls": [
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3840"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "completion-callback",
+          "urls": [
+            "https://github.com/pallets/click/issues/3885",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "show-envvar",
+          "urls": [
+            "https://github.com/pallets/click/pull/3884",
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "man-page",
+          "urls": [
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/pull/3865"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "windows-shell-split",
+          "urls": [
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/issues/3886"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "control-bytes",
+          "urls": [
+            "https://github.com/pallets/click/pull/3878",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3840"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "parameter-spec",
+          "urls": [
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/commit/2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+            "https://github.com/pallets/click/commit/9f0bcdf0d868edfc71435cd0aac2dcc08cf94828"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "parameter-names",
+          "urls": [
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/06b2a678741131fd577ce170e23e5ca0aeba0309",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "short-help",
+          "urls": [
+            "https://github.com/pallets/click/pull/3865",
+            "https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "private-utilities",
+          "urls": [
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "edit-winerror",
+          "urls": [
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3887"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "start-release",
+          "urls": [
+            "https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "positional-arguments",
+          "urls": [
+            "https://github.com/pallets/click/commit/bb695aaecdef95832d167fc1d508921745aa824e",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0",
+            "https://github.com/pallets/click/pull/3866"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "merge-stable",
+          "urls": [
+            "https://github.com/pallets/click/commit/3cbaa76b6014be7427d1ab06b4af40f01e7c278e",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "advanced-ui-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "pager-signal-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "custom-help-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "customization-point",
+          "urls": [
+            "https://github.com/pallets/click/pull/3878",
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "open-file-public",
+          "urls": [
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3840"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "notepad-alias",
+          "urls": [
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        }
+      ]
+    },
+    {
+      "strategy": "structure",
+      "rerank": false,
+      "documents": 20,
+      "chunks": 96,
+      "hit_rate_at_3": 1.0,
+      "mrr_at_3": 0.9761904761904762,
+      "cases": [
+        {
+          "case_id": "ansi-style",
+          "urls": [
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3878"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "less-interrupt",
+          "urls": [
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/issues/3885",
+            "https://github.com/pallets/click/pull/3880"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "completion-callback",
+          "urls": [
+            "https://github.com/pallets/click/issues/3885",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "show-envvar",
+          "urls": [
+            "https://github.com/pallets/click/pull/3884",
+            "https://github.com/pallets/click/pull/3865",
+            "https://github.com/pallets/click/pull/3878"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "man-page",
+          "urls": [
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/pull/3884"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "windows-shell-split",
+          "urls": [
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/pull/3878",
+            "https://github.com/pallets/click/issues/3886"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "control-bytes",
+          "urls": [
+            "https://github.com/pallets/click/pull/3878",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/issues/3886"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "parameter-spec",
+          "urls": [
+            "https://github.com/pallets/click/commit/2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+            "https://github.com/pallets/click/commit/9f0bcdf0d868edfc71435cd0aac2dcc08cf94828",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "parameter-names",
+          "urls": [
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/06b2a678741131fd577ce170e23e5ca0aeba0309",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "short-help",
+          "urls": [
+            "https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3",
+            "https://github.com/pallets/click/pull/3865",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "private-utilities",
+          "urls": [
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/issues/3840"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "edit-winerror",
+          "urls": [
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/issues/3887"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "start-release",
+          "urls": [
+            "https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "positional-arguments",
+          "urls": [
+            "https://github.com/pallets/click/commit/bb695aaecdef95832d167fc1d508921745aa824e",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "merge-stable",
+          "urls": [
+            "https://github.com/pallets/click/commit/3cbaa76b6014be7427d1ab06b4af40f01e7c278e",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "advanced-ui-advice",
+          "urls": [
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 0.5,
+          "hit": true
+        },
+        {
+          "case_id": "pager-signal-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3880"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "custom-help-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/pull/3865"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "customization-point",
+          "urls": [
+            "https://github.com/pallets/click/pull/3878",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "open-file-public",
+          "urls": [
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3840"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "notepad-alias",
+          "urls": [
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        }
+      ]
+    },
+    {
+      "strategy": "structure",
+      "rerank": true,
+      "documents": 20,
+      "chunks": 96,
+      "hit_rate_at_3": 1.0,
+      "mrr_at_3": 1.0,
+      "cases": [
+        {
+          "case_id": "ansi-style",
+          "urls": [
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/issues/3886"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "less-interrupt",
+          "urls": [
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3880"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "completion-callback",
+          "urls": [
+            "https://github.com/pallets/click/issues/3885",
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/pull/3880"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "show-envvar",
+          "urls": [
+            "https://github.com/pallets/click/pull/3884",
+            "https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3",
+            "https://github.com/pallets/click/pull/3865"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "man-page",
+          "urls": [
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/pull/3865"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "windows-shell-split",
+          "urls": [
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/issues/3885"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "control-bytes",
+          "urls": [
+            "https://github.com/pallets/click/pull/3878",
+            "https://github.com/pallets/click/pull/3884",
+            "https://github.com/pallets/click/issues/3886"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "parameter-spec",
+          "urls": [
+            "https://github.com/pallets/click/pull/3877",
+            "https://github.com/pallets/click/commit/2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+            "https://github.com/pallets/click/commit/9f0bcdf0d868edfc71435cd0aac2dcc08cf94828"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "parameter-names",
+          "urls": [
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/06b2a678741131fd577ce170e23e5ca0aeba0309",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "short-help",
+          "urls": [
+            "https://github.com/pallets/click/pull/3865",
+            "https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "private-utilities",
+          "urls": [
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/issues/3840"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "edit-winerror",
+          "urls": [
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "start-release",
+          "urls": [
+            "https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "positional-arguments",
+          "urls": [
+            "https://github.com/pallets/click/commit/bb695aaecdef95832d167fc1d508921745aa824e",
+            "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0",
+            "https://github.com/pallets/click/commit/3cbaa76b6014be7427d1ab06b4af40f01e7c278e"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "merge-stable",
+          "urls": [
+            "https://github.com/pallets/click/commit/3cbaa76b6014be7427d1ab06b4af40f01e7c278e",
+            "https://github.com/pallets/click/pull/3866",
+            "https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "advanced-ui-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "pager-signal-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3886",
+            "https://github.com/pallets/click/issues/3887",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "custom-help-advice",
+          "urls": [
+            "https://github.com/pallets/click/issues/3882",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "customization-point",
+          "urls": [
+            "https://github.com/pallets/click/pull/3878",
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/issues/3882"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "open-file-public",
+          "urls": [
+            "https://github.com/pallets/click/issues/3847",
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3877"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        },
+        {
+          "case_id": "notepad-alias",
+          "urls": [
+            "https://github.com/pallets/click/issues/3840",
+            "https://github.com/pallets/click/pull/3880",
+            "https://github.com/pallets/click/issues/3847"
+          ],
+          "reciprocal_rank": 1.0,
+          "hit": true
+        }
+      ]
+    }
+  ]
+}

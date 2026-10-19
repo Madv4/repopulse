@@ -1,0 +1,21 @@
+{"id":"ansi-style","query":"Which issue says ANSI escape codes break Click style output?","relevant_urls":["https://github.com/pallets/click/issues/3887"]}
+{"id":"less-interrupt","query":"What reports that interrupting the less pager can terminate Click?","relevant_urls":["https://github.com/pallets/click/issues/3886"]}
+{"id":"completion-callback","query":"Which report says shell completion unexpectedly invokes parameter callbacks?","relevant_urls":["https://github.com/pallets/click/issues/3885"]}
+{"id":"show-envvar","query":"Which change fixes show_envvar help text for an envvar sequence or empty value?","relevant_urls":["https://github.com/pallets/click/pull/3884"]}
+{"id":"man-page","query":"Where was redirecting --help output to a man page proposed?","relevant_urls":["https://github.com/pallets/click/issues/3882"]}
+{"id":"windows-shell-split","query":"Which PR handles PAGER and EDITOR commands with Windows-specific shell splitting?","relevant_urls":["https://github.com/pallets/click/pull/3880"]}
+{"id":"control-bytes","query":"Which PR displays Ctrl-D and Ctrl-Z input bytes as caret notation in CliRunner?","relevant_urls":["https://github.com/pallets/click/pull/3878"]}
+{"id":"parameter-spec","query":"What introduced Parameter.spec while deprecating human_readable_name?","relevant_urls":["https://github.com/pallets/click/pull/3877","https://github.com/pallets/click/commit/2247b35ea1c47c727d7a06e51fa280e12a863ff6","https://github.com/pallets/click/commit/9f0bcdf0d868edfc71435cd0aac2dcc08cf94828"]}
+{"id":"parameter-names","query":"Where are non-identifier or non-lowercase parameter names deprecated?","relevant_urls":["https://github.com/pallets/click/pull/3866","https://github.com/pallets/click/commit/06b2a678741131fd577ce170e23e5ca0aeba0309","https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0"]}
+{"id":"short-help","query":"Which work fixes abbreviated short help output?","relevant_urls":["https://github.com/pallets/click/pull/3865","https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3"]}
+{"id":"private-utilities","query":"Which issue identifies more private utilities needing public API deprecation?","relevant_urls":["https://github.com/pallets/click/issues/3847"]}
+{"id":"edit-winerror","query":"Where is click.edit on Windows reported to throw WinError 14001 or 87?","relevant_urls":["https://github.com/pallets/click/issues/3840"]}
+{"id":"start-release","query":"Which commit started Click 8.6.0?","relevant_urls":["https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675"]}
+{"id":"positional-arguments","query":"Which commit makes Click list all positional arguments?","relevant_urls":["https://github.com/pallets/click/commit/bb695aaecdef95832d167fc1d508921745aa824e"]}
+{"id":"merge-stable","query":"Which commit merges the stable branch into main?","relevant_urls":["https://github.com/pallets/click/commit/3cbaa76b6014be7427d1ab06b4af40f01e7c278e"]}
+{"id":"advanced-ui-advice","query":"Where did a maintainer suggest Rich or Textual instead of expanding Click's UI helpers?","relevant_urls":["https://github.com/pallets/click/issues/3887"]}
+{"id":"pager-signal-advice","query":"Which discussion says pager signal support would be too complex and recommends Rich?","relevant_urls":["https://github.com/pallets/click/issues/3886"]}
+{"id":"custom-help-advice","query":"Where did maintainers advise replacing the built-in help option with a custom one?","relevant_urls":["https://github.com/pallets/click/issues/3882"]}
+{"id":"customization-point","query":"Which review argues against another xyz_class customization hook because it complicates typing?","relevant_urls":["https://github.com/pallets/click/pull/3878"]}
+{"id":"open-file-public","query":"In which discussion was open_file described as intentionally public but needing better docs or typing?","relevant_urls":["https://github.com/pallets/click/issues/3847"]}
+{"id":"notepad-alias","query":"Where was the Windows Notepad execution alias investigated while reproducing an editor launch error?","relevant_urls":["https://github.com/pallets/click/issues/3840"]}

@@ -11,4 +11,5 @@ build/
 .repopulse/
 traces/
 evals/reports/*.json
+!evals/reports/retrieval_results.json
 evals/reports/latest.md

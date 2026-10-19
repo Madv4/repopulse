@@ -1,0 +1,745 @@
+{
+  "repo": "pallets/click",
+  "captured_at": "2026-10-19T06:26:22.403901+00:00",
+  "window_start": "2026-09-01T00:00:00Z",
+  "window_end": "2026-10-19T00:00:00Z",
+  "source_api": "https://api.github.com/repos/pallets/click",
+  "selection": "Curated recent issues and PRs plus first eight commits in the window; selected fields preserve API text exactly.",
+  "issues": [
+    {
+      "number": 3887,
+      "html_url": "https://github.com/pallets/click/issues/3887",
+      "title": "ANSI escape codes break style()",
+      "body": "When using `style()` or `secho()` to write colored logs on the shell, it can sometimes be short-circuited if the log we try to apply color to is already colored with ANSI escape codes. \n\nThis is an issue when trying to color output from a file for example, when you want to highlight certain words (think of grep).\n\n## Replicate\n```\nansi_red = \"\\033[0;31m\"\nansi_endcolor = \"\\033[0m\"\nclick.secho(f\"{ansi_red}This should be blue{ansi_endcolor}\", fg=\"blue\")\n```\n### output :\n$\\color{red}\\textsf{This should be blue}$\n\n### Expected output :\n$\\color{blue}\\textsf{This should be blue}$\n\nEnvironment:\n\n- Python version: 3.9.25\n- Click version: 8.1.8\n\n_Also present in latest :_\n\n- Python version: 3.10.0\n- Click version: 8.5.0",
+      "user": {
+        "login": "asandoz-cea"
+      },
+      "created_at": "2026-10-15T08:38:50Z",
+      "updated_at": "2026-10-15T14:25:30Z",
+      "closed_at": "2026-10-15T13:31:38Z",
+      "labels": [],
+      "comments": 3
+    },
+    {
+      "number": 3886,
+      "html_url": "https://github.com/pallets/click/issues/3886",
+      "title": "Prevent Click from terminating when less is interrupted",
+      "body": "Today, if I stream output to `less` from Click, I can enter follow mode (`F`):\n> ```\n>        F      Scroll  forward,  and  keep  trying to read when the end of file is reached.  Normally this command would be used when already at the end of the file.  It is a way to monitor the\n>               tail of a file which is growing while it is being viewed.  (The behavior is similar to the \"tail -f\" command.)  To stop waiting for more data, enter the interrupt character (usu‐\n>               ally ^C).  On some systems you can also use ^X.\n> ```\n\nAs described, SIGINT is used to exit that mode... That kills Click, though (i.e. no more output is produced)!\nThis behavior appears to be intentional, but there does not appear to be a way to have output continue.\nIf we were to suppress background interrupts, I could still get Click to terminate by exiting the pager.\n\nIs this something the project would entertain (i.e. adding SIGINT isolation during paging), perhaps behind a flag if both behaviors are desirable?",
+      "user": {
+        "login": "tucked"
+      },
+      "created_at": "2026-10-14T21:10:41Z",
+      "updated_at": "2026-10-14T23:10:59Z",
+      "closed_at": null,
+      "labels": [],
+      "comments": 1
+    },
+    {
+      "number": 3885,
+      "html_url": "https://github.com/pallets/click/issues/3885",
+      "title": "Click shell completion can trigger parameter callbacks unexpectedly",
+      "body": "### Description\n\nShell completion can execute parameter callbacks while Click is only trying to\ndetermine completion information.\n\nThis can cause application code to run during tab completion even though the\ncommand has not been invoked.\n\n### Minimal reproduction\n\n```python\nimport click\n\ndef callback(ctx, param, value):\n    print(\"CALLBACK EXECUTED\", file=__import__(\"sys\").stderr)\n    return value\n\n@click.command()\n@click.option(\"--name\", callback=callback)\ndef cli(name):\n    click.echo(name)\n\nif __name__ == \"__main__\":\n    cli()",
+      "user": {
+        "login": "archiep867-sys"
+      },
+      "created_at": "2026-10-08T05:33:01Z",
+      "updated_at": "2026-10-08T13:03:33Z",
+      "closed_at": "2026-10-08T13:03:33Z",
+      "labels": [],
+      "comments": 0
+    },
+    {
+      "number": 3884,
+      "html_url": "https://github.com/pallets/click/pull/3884",
+      "title": "Fix `show_envvar` output for a sequence or an empty `envvar`",
+      "body": "This PR fixes some awkward rendering in the `Error: Invalid value for '--units' (env var: xxxxx)` error message's hint for special cases of environment variables:\r\n\r\n| Parameter value | Hint before | Hint after |\r\n| --- | --- | --- |\r\n| `envvar=None` | Nothing | Nothing |\r\n| `envvar=\"\"` | `(env var: '')` | Nothing |\r\n| `envvar=[]` | `(env var: '[]')` | Nothing |\r\n| `envvar=[\"WEATHER_UNITS\", \"UNITS\"]` | `(env var: '['WEATHER_UNITS', 'UNITS']')` | `(env var: 'WEATHER_UNITS', 'UNITS')` |\r\n\r\nAlso fixes the rendering of help screen:\r\n| Parameter value | Help screen before | Help screen after |\r\n| --- | --- | --- |\r\n| `envvar=None` | Nothing | Nothing |\r\n| `envvar=\"\"` | `[env var: ]` | Nothing |\r\n| `envvar=[]` | `[env var: ]` | Nothing |\r\n\r\n",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-10-06T13:28:53Z",
+      "updated_at": "2026-10-07T03:34:10Z",
+      "closed_at": "2026-10-06T20:59:00Z",
+      "labels": [
+        {
+          "name": "help output"
+        }
+      ],
+      "comments": 0,
+      "pull_request": true
+    },
+    {
+      "number": 3882,
+      "html_url": "https://github.com/pallets/click/issues/3882",
+      "title": "Support redirecting `--help` to a man page",
+      "body": "### Context\n\nWe have a rather complicated `--help` documentation which would like to forward it to sphinx for the generation. We would still like to have the complete help shown initially, and the closest thing would be to redirect it to a `man ...` call similar to how `git ... --help` does.\n\n### Current state\n\nIt can be hacked around to support this by manually handling the `--help`, but a first-party integration would be more appreciated. Probably also a plugin could be made to support in the meantime.\n\nEdit: although that is not very straightforward 🙃\n\n### Design suggestion\n\nOn the user side this should support:\n- redirecting `--help` to a `man` page (or any other redirect)\n- check a environment variable to decide if the long help or short help should be shown/trigerred\n- `get_help` etc. should continue to give the short help version",
+      "user": {
+        "login": "LecrisUT"
+      },
+      "created_at": "2026-10-05T12:41:48Z",
+      "updated_at": "2026-10-05T14:42:18Z",
+      "closed_at": "2026-10-05T13:47:13Z",
+      "labels": [],
+      "comments": 6
+    },
+    {
+      "number": 3880,
+      "html_url": "https://github.com/pallets/click/pull/3880",
+      "title": "Split `PAGER` and `EDITOR` with a Windows-specific `shlex` equivalent",
+      "body": "When I implemented https://github.com/pallets/click/pull/3777 a couple of weeks ago, I was annoyed by Windows behavior. And wondered why `shlex.split` is only available on Unix-like platforms. Then while cleaning ancient Python 2 stuff in https://github.com/pallets/click/pull/3817/changes#diff-3bd2075eb8cab59a601f5a021078e5763eea117ae315b04d8d2d719de1f45a97R48 , I discovered `CommandLineToArgvW`.\r\n\r\nThis is an attempt to rely on `CommandLineToArgvW`, which seems to do the trick, as a Windows equivalent to [`shlex.split`](https://docs.python.org/3/library/shlex.html#shlex.split).\r\n\r\nBut digging deeper I stumbled upon the discussion upstream at https://github.com/python/cpython/issues/44990#issuecomment-2084965003 , which explain why it was not considered for inclusion in the Python stdlib:\r\n\r\n> on Windows, there isn't a single \"shell syntax\" to target - PowerShell and CMD have very different quoting rules, etc, and the fact that commands can do their own command line parsing (they get passed a command line string rather than an argument array) adds even more complexity.\r\n\r\nAnd that explain why this PRs has limits, and why I choose to keep the shell completion relying on `shlex`.\r\n\r\nI propose this PR anyway as it seems to bring the behavior more in line with Windows default, but kept as draft as I need a bit of feedback about this attempt.\r\n\r\n### Tests\r\n\r\nI collected test cases from past discussions to build up a more comprehensive suite:\r\n- #1760\r\n- #1477\r\n- #2486",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-24T15:09:01Z",
+      "updated_at": "2026-10-08T11:12:16Z",
+      "closed_at": null,
+      "labels": [
+        {
+          "name": "windows"
+        },
+        {
+          "name": "shell completion"
+        }
+      ],
+      "comments": 0,
+      "pull_request": true
+    },
+    {
+      "number": 3878,
+      "html_url": "https://github.com/pallets/click/pull/3878",
+      "title": "Print `\\x04` and `\\x1a` input bytes as `^D` and `^Z` in `CliRunner`",
+      "body": "This PR change `CliRunner` to translate the control bytes and render them differently on output:\r\n\r\n| `<stdin>` byte | Echoed to `<stdout>` as | Pressed keys             |\r\n|----------------|-------------------------|--------------------------|\r\n| `\\x04`         | `^D\\n`                  | `Ctrl+D` on Unix    |\r\n| `\\x1a`         | `^Z\\n`                  | `Ctrl+Z` on Windows |\r\n\r\nIt also no longer passes these bytes to the command.\r\n\r\nAs this introduce behavioral changes, it targets 8.6.0.\r\n\r\nThis will remove an hard-coded patch in `pallets-sphinx-themes` and a follow-up PR is maintained at https://github.com/pallets/pallets-sphinx-themes/pull/133 so you can see the benefits of this change.",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-24T06:46:22Z",
+      "updated_at": "2026-10-14T13:17:49Z",
+      "closed_at": null,
+      "labels": [
+        {
+          "name": "test runner"
+        }
+      ],
+      "comments": 5,
+      "pull_request": true
+    },
+    {
+      "number": 3877,
+      "html_url": "https://github.com/pallets/click/pull/3877",
+      "title": "Add `Parameter.spec` and deprecate `human_readable_name`",
+      "body": "This a follow up of https://github.com/pallets/click/pull/3821 , where I introduced a new `Option.get_help_spec` utility.\r\n\r\nWhile discussing this change, [I realized we had 3 aspects](https://github.com/pallets/click/pull/3821#issuecomment-5510226827) of a parameter for 3 different audiences:\r\n- `decls`: what the developer provide to its argument or option\r\n- `spec`: what the user see in `--help` and what it provide to the CLI\r\n- `name`: what is used internally in Click to identify that argument or option\r\n\r\nAnd I just realize now that I can harmonize this vocabulary in the whole Click codebase with a small effort. This PR is that effort.\r\n\r\nFor illustration, here is the value of each property as taken from the documentation:\r\n\r\n| | `@click.argument('recipe')` | `@click.option('-g', '--gluten-free/--no-gluten-free')` |\r\n|---|---|---|\r\n| `decls` | `('recipe',)` | `('-g', '--gluten-free/--no-gluten-free')` |\r\n| `spec` | `RECIPE` | `--gluten-free` |\r\n| `name` | `recipe` | `gluten_free` |\r\n| `opts` | `['recipe']` | `['-g', '--gluten-free']` |\r\n| `secondary_opts` | `[]` | `['--no-gluten-free']` |\r\n\r\nThe effects this PR has:\r\n- Rename `Parameter.human_readable_name` to `Parameter.spec` and deprecate the former\r\n- Make `get_help_spec` more generic by moving it from `Option` to `Parameter`\r\n- Document `opts` and `opts `\r\n\r\nAnd as such targets 8.6.0.\r\n\r\nI still did not pushed my luck too much by proposing a rename of the `.name` property into `.id` or `.uid` as in [my original comment](https://github.com/pallets/click/pull/3821#issuecomment-5510226827) to keep this proposal reasonable. 😇",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-23T16:40:41Z",
+      "updated_at": "2026-10-05T05:25:44Z",
+      "closed_at": "2026-10-04T22:19:54Z",
+      "labels": [
+        {
+          "name": "parsing"
+        }
+      ],
+      "comments": 1,
+      "pull_request": true
+    },
+    {
+      "number": 3866,
+      "html_url": "https://github.com/pallets/click/pull/3866",
+      "title": "Deprecate parameter names that are: not a Python identifier, or a Python Keyword, or not lower-cased",
+      "body": "This PR prepares the ground for #3827, which is going to refuse parameter names that are not valid Python identifiers.\r\n\r\nThis add `DeprecationWarning` that detect when `Parameter`, `Argument` or `Option` gets a `name` that will be not allowed in the future 9.0.0 release:\r\n- a parameter that is not a Python identifier (check against `str.identifier`)\r\n- a parameter that is a Python keyword (check against `keyword.iskeyword`)\r\n- an option name that is nor lower-cased\r\n\r\nThis PR also copy the majority of tests that were originally proposed in #3827, so the behavior of the `name` is locked down and frozen. This will prevent tweaking or introducing regressions during the full 8.x cycle.\r\n\r\nThis PR also inaugurate the 8.6.0 release on `main`.\r\n\r\n### Historical details\r\n\r\nOf course, I fucked-up the same way I fucked-up 2 months ago with https://github.com/pallets/click/pull/3701 , when juggling between `main` and `stable` branches made me push to `stable`. 😫\r\n\r\nSo:\r\n- I pushed by mistake https://github.com/pallets/click/commit/e2bddbc801dabc4efc3c3c1e32b53b3f938d3efc\r\n- I reverted my mistake on `stable` with https://github.com/pallets/click/commit/d036881798e34289a49b18a5c550c7cf687e5a7a\r\n- And this PR is what it should have been all along\r\n\r\nAnyway, this was resolved by resyncing both branches with https://github.com/pallets/click/pull/3876 .",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-11T13:26:10Z",
+      "updated_at": "2026-10-08T00:33:43Z",
+      "closed_at": "2026-09-23T04:07:18Z",
+      "labels": [
+        {
+          "name": "parsing"
+        },
+        {
+          "name": "tests"
+        }
+      ],
+      "comments": 6,
+      "pull_request": true
+    },
+    {
+      "number": 3865,
+      "html_url": "https://github.com/pallets/click/pull/3865",
+      "title": "Fix short help abbreviation",
+      "body": "Just a small bug I encountered in my CLIs, where as `vs.` or `e.g.` was prematurely ending the shorten version of a help message produced by `_make_default_short_help`.\r\n\r\nAlso use the opportunity to simplify the calculations and depends on Python's `textwrap.shorten`.",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-11T06:25:50Z",
+      "updated_at": "2026-09-27T00:36:31Z",
+      "closed_at": "2026-09-12T02:35:08Z",
+      "labels": [
+        {
+          "name": "help output"
+        }
+      ],
+      "comments": 0,
+      "pull_request": true
+    },
+    {
+      "number": 3847,
+      "html_url": "https://github.com/pallets/click/issues/3847",
+      "title": "More private utilities that need to be marked and public api deprecated",
+      "body": "In types.py\n- [ ]  `convert_type` - rename to _convert_type - currently has no top level import\n- [ ] `FuncParamType` - maybe typing thing? - currently has no top level import\n\nIn _ ?,\n- [ ] consider deprecating 'open_file'",
+      "user": {
+        "login": "Rowlando13"
+      },
+      "created_at": "2026-09-06T00:43:13Z",
+      "updated_at": "2026-09-20T13:39:02Z",
+      "closed_at": null,
+      "labels": [
+        {
+          "name": "typing"
+        }
+      ],
+      "comments": 9
+    },
+    {
+      "number": 3840,
+      "html_url": "https://github.com/pallets/click/issues/3840",
+      "title": "`click.edit` on Windows throws WinError 14001 or 87",
+      "body": "I found this bug while testing my own Click application. In about half the times `click.edit()` is attempted on Windows, `notepad.exe` will fail to launch with one of these two error messages (output under spoilers):\n\n<details>\n<summary>OSError: [WinError 87] The parameter is incorrect</summary>\n\n```\nPS C:\\Users\\Emory> python .\\click-notepad-me.py\nTraceback (most recent call last):\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 729, in edit_files\n    c = subprocess.Popen(\n        args=shlex.split(editor) + list(filenames),\n        env=environ,\n    )\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\subprocess.py\", line 1038, in __init__\n    self._execute_child(args, executable, preexec_fn, close_fds,\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n                        pass_fds, cwd, env,\n                        ^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n                        gid, gids, uid, umask,\n                        ^^^^^^^^^^^^^^^^^^^^^^\n                        start_new_session, process_group)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\subprocess.py\", line 1552, in _execute_child\n    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,\n                       ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n                             # no special security\n                             ^^^^^^^^^^^^^^^^^^^^^\n    ...<4 lines>...\n                             cwd,\n                             ^^^^\n                             startupinfo)\n                             ^^^^^^^^^^^^\nOSError: [WinError 87] The parameter is incorrect\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Emory\\click-notepad-me.py\", line 3, in <module>\n    _ = click.edit()\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\termui.py\", line 904, in edit\n    return ed.edit(text)\n           ~~~~~~~^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 783, in edit\n    self.edit_files((name,))\n    ~~~~~~~~~~~~~~~^^^^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 739, in edit_files\n    raise ClickException(\n        _(\"{editor}: Editing failed: {e}\").format(editor=editor, e=e)\n    ) from e\nclick.exceptions.ClickException: notepad: Editing failed: [WinError 87] The parameter is incorrect\n```\n</details>\n\nor\n\n<details>\n<summary>OSError: [WinError 14001] The application has failed to start because its side-by-side configuration is incorrect. Please see the application event log or use the command-line sxstrace.exe tool for more detail</summary>\n\n```\nPS C:\\Users\\Emory> python .\\click-notepad-me.py\nTraceback (most recent call last):\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 729, in edit_files\n    c = subprocess.Popen(\n        args=shlex.split(editor) + list(filenames),\n        env=environ,\n    )\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\subprocess.py\", line 1038, in __init__\n    self._execute_child(args, executable, preexec_fn, close_fds,\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n                        pass_fds, cwd, env,\n                        ^^^^^^^^^^^^^^^^^^^\n    ...<5 lines>...\n                        gid, gids, uid, umask,\n                        ^^^^^^^^^^^^^^^^^^^^^^\n                        start_new_session, process_group)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\subprocess.py\", line 1552, in _execute_child\n    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,\n                       ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^\n                             # no special security\n                             ^^^^^^^^^^^^^^^^^^^^^\n    ...<4 lines>...\n                             cwd,\n                             ^^^^\n                             startupinfo)\n                             ^^^^^^^^^^^^\nOSError: [WinError 14001] The application has failed to start because its side-by-side configuration is incorrect. Please see the application event log or use the command-line sxstrace.exe tool for more detail\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\Emory\\click-notepad-me.py\", line 3, in <module>\n    _ = click.edit()\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\termui.py\", line 904, in edit\n    return ed.edit(text)\n           ~~~~~~~^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 783, in edit\n    self.edit_files((name,))\n    ~~~~~~~~~~~~~~~^^^^^^^^^\n  File \"C:\\Users\\Emory\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\site-packages\\click\\_termui_impl.py\", line 739, in edit_files\n    raise ClickException(\n        _(\"{editor}: Editing failed: {e}\").format(editor=editor, e=e)\n    ) from e\nclick.exceptions.ClickException: notepad: Editing failed: [WinError 14001] The application has failed to start because its side-by-side configuration is incorrect. Please see the application event log or use the command-line sxstrace.exe tool for more detail\n```\n</details>\n\nTo replicate, run this script until you get one of these:\n\n```py\nimport click\n_ = click.edit()\nprint(\"If you got here, no crash occurred\")\n```\n\nEnvironment:\n\n- Python version: 3.12.14 / also reproduced on my system 3.14 install\n- Click version: 8.5.0\n- OS: Windows 11 (64-bit)\n",
+      "user": {
+        "login": "emorynb"
+      },
+      "created_at": "2026-09-05T13:49:09Z",
+      "updated_at": "2026-09-14T12:06:35Z",
+      "closed_at": null,
+      "labels": [],
+      "comments": 1
+    }
+  ],
+  "pulls": {
+    "3884": {
+      "number": 3884,
+      "html_url": "https://github.com/pallets/click/pull/3884",
+      "title": "Fix `show_envvar` output for a sequence or an empty `envvar`",
+      "body": "This PR fixes some awkward rendering in the `Error: Invalid value for '--units' (env var: xxxxx)` error message's hint for special cases of environment variables:\r\n\r\n| Parameter value | Hint before | Hint after |\r\n| --- | --- | --- |\r\n| `envvar=None` | Nothing | Nothing |\r\n| `envvar=\"\"` | `(env var: '')` | Nothing |\r\n| `envvar=[]` | `(env var: '[]')` | Nothing |\r\n| `envvar=[\"WEATHER_UNITS\", \"UNITS\"]` | `(env var: '['WEATHER_UNITS', 'UNITS']')` | `(env var: 'WEATHER_UNITS', 'UNITS')` |\r\n\r\nAlso fixes the rendering of help screen:\r\n| Parameter value | Help screen before | Help screen after |\r\n| --- | --- | --- |\r\n| `envvar=None` | Nothing | Nothing |\r\n| `envvar=\"\"` | `[env var: ]` | Nothing |\r\n| `envvar=[]` | `[env var: ]` | Nothing |\r\n\r\n",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-10-06T13:28:53Z",
+      "updated_at": "2026-10-07T03:34:10Z",
+      "closed_at": "2026-10-06T20:59:00Z",
+      "merged_at": "2026-10-06T20:59:00Z",
+      "labels": [
+        {
+          "name": "help output"
+        }
+      ],
+      "review_comments": 0
+    },
+    "3880": {
+      "number": 3880,
+      "html_url": "https://github.com/pallets/click/pull/3880",
+      "title": "Split `PAGER` and `EDITOR` with a Windows-specific `shlex` equivalent",
+      "body": "When I implemented https://github.com/pallets/click/pull/3777 a couple of weeks ago, I was annoyed by Windows behavior. And wondered why `shlex.split` is only available on Unix-like platforms. Then while cleaning ancient Python 2 stuff in https://github.com/pallets/click/pull/3817/changes#diff-3bd2075eb8cab59a601f5a021078e5763eea117ae315b04d8d2d719de1f45a97R48 , I discovered `CommandLineToArgvW`.\r\n\r\nThis is an attempt to rely on `CommandLineToArgvW`, which seems to do the trick, as a Windows equivalent to [`shlex.split`](https://docs.python.org/3/library/shlex.html#shlex.split).\r\n\r\nBut digging deeper I stumbled upon the discussion upstream at https://github.com/python/cpython/issues/44990#issuecomment-2084965003 , which explain why it was not considered for inclusion in the Python stdlib:\r\n\r\n> on Windows, there isn't a single \"shell syntax\" to target - PowerShell and CMD have very different quoting rules, etc, and the fact that commands can do their own command line parsing (they get passed a command line string rather than an argument array) adds even more complexity.\r\n\r\nAnd that explain why this PRs has limits, and why I choose to keep the shell completion relying on `shlex`.\r\n\r\nI propose this PR anyway as it seems to bring the behavior more in line with Windows default, but kept as draft as I need a bit of feedback about this attempt.\r\n\r\n### Tests\r\n\r\nI collected test cases from past discussions to build up a more comprehensive suite:\r\n- #1760\r\n- #1477\r\n- #2486",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-24T15:09:01Z",
+      "updated_at": "2026-10-08T11:12:16Z",
+      "closed_at": null,
+      "merged_at": null,
+      "labels": [
+        {
+          "name": "windows"
+        },
+        {
+          "name": "shell completion"
+        }
+      ],
+      "review_comments": 0
+    },
+    "3878": {
+      "number": 3878,
+      "html_url": "https://github.com/pallets/click/pull/3878",
+      "title": "Print `\\x04` and `\\x1a` input bytes as `^D` and `^Z` in `CliRunner`",
+      "body": "This PR change `CliRunner` to translate the control bytes and render them differently on output:\r\n\r\n| `<stdin>` byte | Echoed to `<stdout>` as | Pressed keys             |\r\n|----------------|-------------------------|--------------------------|\r\n| `\\x04`         | `^D\\n`                  | `Ctrl+D` on Unix    |\r\n| `\\x1a`         | `^Z\\n`                  | `Ctrl+Z` on Windows |\r\n\r\nIt also no longer passes these bytes to the command.\r\n\r\nAs this introduce behavioral changes, it targets 8.6.0.\r\n\r\nThis will remove an hard-coded patch in `pallets-sphinx-themes` and a follow-up PR is maintained at https://github.com/pallets/pallets-sphinx-themes/pull/133 so you can see the benefits of this change.",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-24T06:46:22Z",
+      "updated_at": "2026-10-14T13:17:49Z",
+      "closed_at": null,
+      "merged_at": null,
+      "labels": [
+        {
+          "name": "test runner"
+        }
+      ],
+      "review_comments": 0
+    },
+    "3877": {
+      "number": 3877,
+      "html_url": "https://github.com/pallets/click/pull/3877",
+      "title": "Add `Parameter.spec` and deprecate `human_readable_name`",
+      "body": "This a follow up of https://github.com/pallets/click/pull/3821 , where I introduced a new `Option.get_help_spec` utility.\r\n\r\nWhile discussing this change, [I realized we had 3 aspects](https://github.com/pallets/click/pull/3821#issuecomment-5510226827) of a parameter for 3 different audiences:\r\n- `decls`: what the developer provide to its argument or option\r\n- `spec`: what the user see in `--help` and what it provide to the CLI\r\n- `name`: what is used internally in Click to identify that argument or option\r\n\r\nAnd I just realize now that I can harmonize this vocabulary in the whole Click codebase with a small effort. This PR is that effort.\r\n\r\nFor illustration, here is the value of each property as taken from the documentation:\r\n\r\n| | `@click.argument('recipe')` | `@click.option('-g', '--gluten-free/--no-gluten-free')` |\r\n|---|---|---|\r\n| `decls` | `('recipe',)` | `('-g', '--gluten-free/--no-gluten-free')` |\r\n| `spec` | `RECIPE` | `--gluten-free` |\r\n| `name` | `recipe` | `gluten_free` |\r\n| `opts` | `['recipe']` | `['-g', '--gluten-free']` |\r\n| `secondary_opts` | `[]` | `['--no-gluten-free']` |\r\n\r\nThe effects this PR has:\r\n- Rename `Parameter.human_readable_name` to `Parameter.spec` and deprecate the former\r\n- Make `get_help_spec` more generic by moving it from `Option` to `Parameter`\r\n- Document `opts` and `opts `\r\n\r\nAnd as such targets 8.6.0.\r\n\r\nI still did not pushed my luck too much by proposing a rename of the `.name` property into `.id` or `.uid` as in [my original comment](https://github.com/pallets/click/pull/3821#issuecomment-5510226827) to keep this proposal reasonable. 😇",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-23T16:40:41Z",
+      "updated_at": "2026-10-05T05:25:44Z",
+      "closed_at": "2026-10-04T22:19:54Z",
+      "merged_at": "2026-10-04T22:19:54Z",
+      "labels": [
+        {
+          "name": "parsing"
+        }
+      ],
+      "review_comments": 0
+    },
+    "3866": {
+      "number": 3866,
+      "html_url": "https://github.com/pallets/click/pull/3866",
+      "title": "Deprecate parameter names that are: not a Python identifier, or a Python Keyword, or not lower-cased",
+      "body": "This PR prepares the ground for #3827, which is going to refuse parameter names that are not valid Python identifiers.\r\n\r\nThis add `DeprecationWarning` that detect when `Parameter`, `Argument` or `Option` gets a `name` that will be not allowed in the future 9.0.0 release:\r\n- a parameter that is not a Python identifier (check against `str.identifier`)\r\n- a parameter that is a Python keyword (check against `keyword.iskeyword`)\r\n- an option name that is nor lower-cased\r\n\r\nThis PR also copy the majority of tests that were originally proposed in #3827, so the behavior of the `name` is locked down and frozen. This will prevent tweaking or introducing regressions during the full 8.x cycle.\r\n\r\nThis PR also inaugurate the 8.6.0 release on `main`.\r\n\r\n### Historical details\r\n\r\nOf course, I fucked-up the same way I fucked-up 2 months ago with https://github.com/pallets/click/pull/3701 , when juggling between `main` and `stable` branches made me push to `stable`. 😫\r\n\r\nSo:\r\n- I pushed by mistake https://github.com/pallets/click/commit/e2bddbc801dabc4efc3c3c1e32b53b3f938d3efc\r\n- I reverted my mistake on `stable` with https://github.com/pallets/click/commit/d036881798e34289a49b18a5c550c7cf687e5a7a\r\n- And this PR is what it should have been all along\r\n\r\nAnyway, this was resolved by resyncing both branches with https://github.com/pallets/click/pull/3876 .",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-11T13:26:10Z",
+      "updated_at": "2026-10-08T00:33:43Z",
+      "closed_at": "2026-09-23T04:07:18Z",
+      "merged_at": "2026-09-23T04:07:18Z",
+      "labels": [
+        {
+          "name": "parsing"
+        },
+        {
+          "name": "tests"
+        }
+      ],
+      "review_comments": 0
+    },
+    "3865": {
+      "number": 3865,
+      "html_url": "https://github.com/pallets/click/pull/3865",
+      "title": "Fix short help abbreviation",
+      "body": "Just a small bug I encountered in my CLIs, where as `vs.` or `e.g.` was prematurely ending the shorten version of a help message produced by `_make_default_short_help`.\r\n\r\nAlso use the opportunity to simplify the calculations and depends on Python's `textwrap.shorten`.",
+      "user": {
+        "login": "kdeldycke"
+      },
+      "created_at": "2026-09-11T06:25:50Z",
+      "updated_at": "2026-09-27T00:36:31Z",
+      "closed_at": "2026-09-12T02:35:08Z",
+      "merged_at": "2026-09-12T02:35:08Z",
+      "labels": [
+        {
+          "name": "help output"
+        }
+      ],
+      "review_comments": 0
+    }
+  },
+  "issue_comments": {
+    "3887": [
+      {
+        "html_url": "https://github.com/pallets/click/issues/3887#issuecomment-6193291997",
+        "body": "`secho` isn't intended to override colors. If you already have colors, you should strip them first if you want to restyle them.",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-10-15T13:31:38Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3887#issuecomment-6194366859",
+        "body": "I agree with you but the function in _compat that strip color isn't accessible by default when importing click.  Maybe make it accessible directly from the click module ?",
+        "user": {
+          "login": "asandoz-cea"
+        },
+        "created_at": "2026-10-15T14:22:34Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3887#issuecomment-6194430215",
+        "body": "That's for our own color support. Click's main focus is being a CLI application framework, not a UI library, so we don't want to add more complexity to the UI utilities at this point. If you need more advanced UI support, use Rich or Textual. ",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-10-15T14:25:30Z"
+      }
+    ],
+    "3886": [
+      {
+        "html_url": "https://github.com/pallets/click/issues/3886#issuecomment-6180526448",
+        "body": "Click's core purpose is a CLI parsing and processing library, not a CLI UI library. Pager support is already ridiculously complex. I do not want to add signal support on top of that. Use rich https://rich.readthedocs.io/en/stable/console.html#paging or some other library if you need more complex support.",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-10-14T23:10:58Z"
+      }
+    ],
+    "3882": [
+      {
+        "html_url": "https://github.com/pallets/click/issues/3882#issuecomment-5995775253",
+        "body": "For something this custom, disable the built-in help option and write your own.",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-10-05T13:47:13Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3882#issuecomment-5996115086",
+        "body": "I would say from trying to do this, it is not that straightforward:\n- `Command.get_help_option` does not have easy ways to hook a different `help_option` decorator\n- `NoArgsIsHelpError`/`no_args_is_help` is also difficult to hook into",
+        "user": {
+          "login": "LecrisUT"
+        },
+        "created_at": "2026-10-05T14:06:08Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3882#issuecomment-5996399565",
+        "body": "Neither of those things are how you override it. If you define a help option, the default is not added. https://click.palletsprojects.com/en/stable/documentation/#help-parameter-customization",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-10-05T14:21:29Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3882#issuecomment-5996466532",
+        "body": "> Neither of those things are how you override it. If you define a help option, the default is not added. https://click.palletsprojects.com/en/stable/documentation/#help-parameter-customization\n\nThat page is about overriding the `--help` option, not the `callback`, i.e.\nhttps://github.com/pallets/click/blob/2247b35ea1c47c727d7a06e51fa280e12a863ff6/src/click/decorators.py#L612-L616\nwhich is part of the decorator.",
+        "user": {
+          "login": "LecrisUT"
+        },
+        "created_at": "2026-10-05T14:25:07Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3882#issuecomment-5996595952",
+        "body": "Be sure to try it rather than trying to find the code that deals with it internally:\n\n```python\nimport click\n\n@click.command()\n@click.option(\"--help\", is_flag=True, expose_value=False)\ndef main():\n    pass\n\nif __name__ == \"__main__\":\n    main()\n```\n\n```\npython example.py --help\n```\n\nThis does not result in help text being shown. Therefore, you can have that option do something else.",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-10-05T14:32:06Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3882#issuecomment-5996782338",
+        "body": "I did consider\n```\n@click.option(\"--help\", is_flag=True, expose_value=False, callback=...)\n```\nbut I do not want to manually add it to all commands (adding it automatically is basically redoing the logic that invokes `help_command`), the decorator part has more handling via `resilient_parsing`, etc., and it does not cover `NoArgsIsHelpError` case.",
+        "user": {
+          "login": "LecrisUT"
+        },
+        "created_at": "2026-10-05T14:42:18Z"
+      }
+    ],
+    "3878": [
+      {
+        "html_url": "https://github.com/pallets/click/pull/3878#issuecomment-5817240091",
+        "body": "I'd prefer not to add more `xyz_class` style customization points, unless _absolutely_ necessary. It makes typing more complex for anything that wants to override methods on such a class (that wouldn't really be the case here, but still). I'm actively removing them from Flask and Werkzeug.\r\n\r\nI'm not particularly bothered by the override in the theme. I don't think enough things would want to override this to justify the new attribute.\r\n\r\nPerhaps we should consider why the default echo _doesn't_ show control input? Perhaps we can add it here and remove the override that way?",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-09-24T15:37:27Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/pull/3878#issuecomment-5872720930",
+        "body": "> why the default echo doesn't show control input? Perhaps we can add it here and remove the override that way?\r\n\r\nYes, I'm OK to explore that direction instead. I don't have a real use-case, just stumble upon it while cleaning my own re-implementation of the `{click:*}` directives for Sphinx.\r\n\r\nQuestion is, should we translate all control bytes to caret-based notation or should we just do `\\x04`, and maybe `\\x1a` as  `_translate_ch_to_exc` does?\r\n\r\nhttps://github.com/pallets/click/blob/06b2a678741131fd577ce170e23e5ca0aeba0309/src/click/_termui_impl.py#L869-L877",
+        "user": {
+          "login": "kdeldycke"
+        },
+        "created_at": "2026-09-28T15:05:59Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/pull/3878#issuecomment-5985054430",
+        "body": "@kdeldycke I also think not more customization here would be good. ",
+        "user": {
+          "login": "Rowlando13"
+        },
+        "created_at": "2026-10-04T22:17:47Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/pull/3878#issuecomment-5993654891",
+        "body": "Just reworked that PR and pushed it a bit: it now integrates directly the modifications from `pallets-sphinx-themes`, and perform the translation of bytes in `CliRunner`:\r\n\r\n| `<stdin>` byte | Echoed to `<stdout>` as | Pressed keys             |\r\n|----------------|-------------------------|--------------------------|\r\n| `\\x04`         | `^D\\n`                  | `Ctrl+D` on Unix    |\r\n| `\\x1a`         | `^Z\\n`                  | `Ctrl+Z` on Windows |\r\n\r\nThis does not propose a documented point of customization, but change the behavior of the `CliRunner`.",
+        "user": {
+          "login": "kdeldycke"
+        },
+        "created_at": "2026-10-05T11:37:30Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/pull/3878#issuecomment-5993854941",
+        "body": "Just retargeted to 8.6.0 . This PR is ready for a review.",
+        "user": {
+          "login": "kdeldycke"
+        },
+        "created_at": "2026-10-05T11:51:16Z"
+      }
+    ],
+    "3877": [
+      {
+        "html_url": "https://github.com/pallets/click/pull/3877#issuecomment-5799064018",
+        "body": "@janluke you might be interested by this change as it might help you get rid of the `get_param_label` you have in https://github.com/janLuke/cloup/blob/30c6ae0aca2414461e3b71096009958707b5686a/src/cloup/constraints/common.py#L57-L60",
+        "user": {
+          "login": "kdeldycke"
+        },
+        "created_at": "2026-09-23T16:57:07Z"
+      }
+    ],
+    "3866": [
+      {
+        "html_url": "https://github.com/pallets/click/pull/3866#issuecomment-5635341795",
+        "body": "What do you think, should we also check `keyword.iskeyword`? Might be good to warn about it and see if anything comes up.",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-09-11T13:45:40Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/pull/3866#issuecomment-5635842997",
+        "body": "> What do you think, should we also check `keyword.iskeyword`? Might be good to warn about it and see if anything comes up.\r\n\r\nAh. That might be a good idea: test drive that check during a long 8.x cycle and see if it show up... If I implement this, what kind of severity should it triggers? A `DeprecationWarning` like non-Python-IDs ?",
+        "user": {
+          "login": "kdeldycke"
+        },
+        "created_at": "2026-09-11T14:20:03Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/pull/3866#issuecomment-5635897025",
+        "body": "Deprecation seems fine. Like I said in the other thread, it could be more disruptive, but it also seems to match the intention of the `str.isidentifier` check.",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-09-11T14:23:21Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/pull/3866#issuecomment-5759433441",
+        "body": "Just implemented the double `isidentifier()` / `iskeyword()` deprecation check in a common `_check_name_is_usable()` internal function. The later is maybe a bit too verbose as I distinguished the 2 cases and reused the deprecation explanation from `docs/upgrade-guides.md`. Can make it way smaller if you want to.\r\n\r\nThis is ready to be reviewed for eventual merge.",
+        "user": {
+          "login": "kdeldycke"
+        },
+        "created_at": "2026-09-21T11:02:05Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/pull/3866#issuecomment-5765772139",
+        "body": "@kdeldycke this should merge into main. I don't we should issue new deprecations on bug fix versions. ",
+        "user": {
+          "login": "Rowlando13"
+        },
+        "created_at": "2026-09-21T18:51:01Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/pull/3866#issuecomment-5772367936",
+        "body": "> @kdeldycke this should merge into main. I don't we should issue new deprecations on bug fix versions.\r\n\r\nOK make sense. So I retargeted the `main` branch, added a new commit in this PR to inaugurate the 8.6.0 release and updated the doc to target that release. And this time I hope I did not made any mistake juggling with the two branches... 🫣",
+        "user": {
+          "login": "kdeldycke"
+        },
+        "created_at": "2026-09-22T06:52:20Z"
+      }
+    ],
+    "3847": [
+      {
+        "html_url": "https://github.com/pallets/click/issues/3847#issuecomment-5619758046",
+        "body": "Should `open_file` and `safecall` be made private as well?\n\nI'm looking at adapting `pip-tools` to handle v8.5.0 this morning, and we have (this all looks weird to me)...\n```python\nmy_file = click.open_file(filename, \"w+b\", atomic=True, lazy=True)\nassert my_file is not None\nif isinstance(my_file, click.utils.LazyFile):\n    ctx.call_on_close(click.utils.safecall(my_file.close_intelligently))\n```\n\nI don't see any reason that anyone outside of `click` should ever use `safecall`: it's trivial to write it yourself. `open_file` doesn't seem good to expose if its return type won't be exposed. It's hard to figure out how to use it correctly in this case.\n\n(We do want `close_intelligently()` since the target filename could be `\"-\"`.)",
+        "user": {
+          "login": "sirosen"
+        },
+        "created_at": "2026-09-10T13:49:59Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3847#issuecomment-5647464720",
+        "body": "safe call is deprecated. It should issue a deprecation warning. I will have to check on the other. ",
+        "user": {
+          "login": "Rowlando13"
+        },
+        "created_at": "2026-09-12T17:20:10Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3847#issuecomment-5647567968",
+        "body": "We will have to look at open_file. It is public on purpose but may need better type annotation or docs. ",
+        "user": {
+          "login": "Rowlando13"
+        },
+        "created_at": "2026-09-12T17:38:22Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3847#issuecomment-5648250005",
+        "body": "I didn't want to suggest too much at first, but maybe we can spec it out with a `typing.Protocol`? I'm happy to help out if you want to go that route.\n\nAnd yeah, I didn't notice that `safecall` was also warning, since I fixed this \"all at once\" on my end.",
+        "user": {
+          "login": "sirosen"
+        },
+        "created_at": "2026-09-12T19:43:59Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3847#issuecomment-5648590318",
+        "body": "Feel free to open an issue and propose a PR for what you think is best. I am always interested in type hints or docs that make usage clearer. ",
+        "user": {
+          "login": "Rowlando13"
+        },
+        "created_at": "2026-09-12T20:46:39Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3847#issuecomment-5732159143",
+        "body": "I feel like `open_file` should be private, but I haven't looked enough. `atomic` should be deprecated, if I remember correctly it's not actually atomic and there are better libraries out there for atomic access. `lazy` is only useful for the `File` param type when opening a file for writing, and should be invisible to the public API. It shouldn't matter if it's lazy, it should just close silently.",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-09-18T15:22:45Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3847#issuecomment-5734995429",
+        "body": "Aside: I didn't suggest a protocol because I didn't come up with a good name or home for it. Which might be a sign that it's not a great idea.\n\nI'm not aware of a good, supported library for atomic/transactional writes. So if it becomes private, I'll probably review [this old thread](https://discuss.python.org/t/adding-atomicwrite-in-stdlib/11899) (which has lots of good notes and ideas) and roll my own. Which I'm okay with.\n\nFrom my perspective:\n- it's weird that `open_file` is exposed at all; it feels orthogonal to most of the concerns of `click` (even though it will be a pain for me, I'm in favor of making it private)\n- it's arguable that even implementing `lazy=True` is outside of what `click` should be doing\n\nI'm using `LazyFile` in a few places today, but I feel like the ideal path is to put together something that's a replacement and can be passed as a param type, but outside of `click`. Let the core library stay lean and focused.",
+        "user": {
+          "login": "sirosen"
+        },
+        "created_at": "2026-09-18T19:15:38Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3847#issuecomment-5735088565",
+        "body": "> it feels orthogonal to most of the concerns of click\n\nYes, this is a general problem with the pallets libraries exposing so many utilities and customization points. We're trying to clean this up in general. See for example the next Werkzeug 3.2 release, which is a huge wall of deprecations.",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-09-18T19:23:44Z"
+      },
+      {
+        "html_url": "https://github.com/pallets/click/issues/3847#issuecomment-5750125528",
+        "body": "The library I was thinking of was [atomicwrites](https://github.com/untitaker/python-atomicwrites), which is archived in favor of [`os.replace`](https://docs.python.org/3.14/library/os.html#os.replace) or [`os.rename`](https://docs.python.org/3.14/library/os.html#os.rename). Those are both documented as atomic.\n\nThe simplest answer for lazy is probably to use `Path` instead of `File` param types, and handle opening the file yourself when you write. That's probably a lot simpler than all the stuff we have to go through for `File` anyway.",
+        "user": {
+          "login": "davidism"
+        },
+        "created_at": "2026-09-20T13:33:21Z"
+      }
+    ],
+    "3840": [
+      {
+        "html_url": "https://github.com/pallets/click/issues/3840#issuecomment-5662773718",
+        "body": "I tried recreating the issue on my own system: `windows 11 build number (26100.9445)`, `python version 3.14`, and also checked for Notepad execution alias toggle which was default nothing to change, but I couldn't recreate it , tested it for for total 30 iterations no failures not even one.\nThen I investigated the issue from different paths, and perspectives : first - I tired to crosscheck shlex working and how it is used in the codebase, as `shlex` is based on unix systems, so it treats backslashes differently which can cause an error but as 'notepad' passed directly Nothing could be wrong here( it’s single string so no split), and environment which was passed in click function, was just copy of original one Nothing changed.So that completely eliminated any parsing issue, or conditional check issue as error messages suggested.\nSo next thing i dig up was, windows error which were mentioned : `INVALID_PARAMETER` and `ERROR_SXS_CANT_GEN_ACTCTX`, I explored few articles on this , one was completely related to this ( it is from Microsoft's own Q&A platform) , and it’s main point was that crash inside a specific alias-resolution dll, is inconsistent or random getting 4 times out of 10 time failures( same condition as described in the this issue description ), but it pointed to alias thing which again i tried to debug and analyse it ( as many users have experience this issue, regarding notepad specifically in windows).\nAnd as i couldn't recreate the error, it is currently too vague to work on a solution and from my conclusion it seems like a know windows platform bug rather than click functionality error, here's is a thread to support this (<https://learn.microsoft.com/en-us/answers/questions/2109069/createprocess-on-notepad-exe-fails-due-to-a-crash>) , and as in the thread, someone already tested with full exe path too, but it did not succeed as per them.\nI would like to know the maintainers view on this particular issue, and about my findings.\n\n",
+        "user": {
+          "login": "Vaibhavtripathi7"
+        },
+        "created_at": "2026-09-14T10:48:34Z"
+      }
+    ]
+  },
+  "review_comments": {},
+  "commits": [
+    {
+      "sha": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+      "html_url": "https://github.com/pallets/click/commit/2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+      "author": {
+        "login": "Rowlando13"
+      },
+      "commit": {
+        "message": "Add `Parameter.spec` and deprecate `human_readable_name` (#3877)",
+        "author": {
+          "name": "Rowlando13"
+        },
+        "committer": {
+          "date": "2026-10-04T22:19:53Z"
+        }
+      }
+    },
+    {
+      "sha": "9f0bcdf0d868edfc71435cd0aac2dcc08cf94828",
+      "html_url": "https://github.com/pallets/click/commit/9f0bcdf0d868edfc71435cd0aac2dcc08cf94828",
+      "author": {
+        "login": "kdeldycke"
+      },
+      "commit": {
+        "message": "Add `Parameter.spec` and deprecate `human_readable_name`",
+        "author": {
+          "name": "Kevin Deldycke"
+        },
+        "committer": {
+          "date": "2026-09-23T16:52:07Z"
+        }
+      }
+    },
+    {
+      "sha": "06b2a678741131fd577ce170e23e5ca0aeba0309",
+      "html_url": "https://github.com/pallets/click/commit/06b2a678741131fd577ce170e23e5ca0aeba0309",
+      "author": {
+        "login": "Rowlando13"
+      },
+      "commit": {
+        "message": "Deprecate parameter names that are: not a Python identifier, or a Python Keyword, or not lower-cased (#3866)",
+        "author": {
+          "name": "Rowlando13"
+        },
+        "committer": {
+          "date": "2026-09-23T04:07:17Z"
+        }
+      }
+    },
+    {
+      "sha": "b90faad1788bc030bb3320938f07c9189f42d7d0",
+      "html_url": "https://github.com/pallets/click/commit/b90faad1788bc030bb3320938f07c9189f42d7d0",
+      "author": {
+        "login": "kdeldycke"
+      },
+      "commit": {
+        "message": "Deprecate a parameter name that Click 9.0 will refuse or lower case\n\nPrepares the ground for #3827",
+        "author": {
+          "name": "Kevin Deldycke"
+        },
+        "committer": {
+          "date": "2026-09-22T06:39:58Z"
+        }
+      }
+    },
+    {
+      "sha": "a59f7c624fb7272e37d97921047dab8bf3ff0675",
+      "html_url": "https://github.com/pallets/click/commit/a59f7c624fb7272e37d97921047dab8bf3ff0675",
+      "author": {
+        "login": "kdeldycke"
+      },
+      "commit": {
+        "message": "Start 8.6.0.",
+        "author": {
+          "name": "Kevin Deldycke"
+        },
+        "committer": {
+          "date": "2026-09-22T06:39:50Z"
+        }
+      }
+    },
+    {
+      "sha": "3cbaa76b6014be7427d1ab06b4af40f01e7c278e",
+      "html_url": "https://github.com/pallets/click/commit/3cbaa76b6014be7427d1ab06b4af40f01e7c278e",
+      "author": {
+        "login": "Rowlando13"
+      },
+      "commit": {
+        "message": "Merge stable into main (#3876)",
+        "author": {
+          "name": "Rowlando13"
+        },
+        "committer": {
+          "date": "2026-09-21T18:54:47Z"
+        }
+      }
+    },
+    {
+      "sha": "bb695aaecdef95832d167fc1d508921745aa824e",
+      "html_url": "https://github.com/pallets/click/commit/bb695aaecdef95832d167fc1d508921745aa824e",
+      "author": {
+        "login": "Rowlando13"
+      },
+      "commit": {
+        "message": "Always list all positional arguments (#3860)",
+        "author": {
+          "name": "Rowlando13"
+        },
+        "committer": {
+          "date": "2026-09-21T18:30:59Z"
+        }
+      }
+    },
+    {
+      "sha": "70689853e39c30e36eb0d83d586cc914a74db9d3",
+      "html_url": "https://github.com/pallets/click/commit/70689853e39c30e36eb0d83d586cc914a74db9d3",
+      "author": {
+        "login": "Rowlando13"
+      },
+      "commit": {
+        "message": "Fix short help abbreviation (#3865)",
+        "author": {
+          "name": "Rowlando13"
+        },
+        "committer": {
+          "date": "2026-09-12T02:35:07Z"
+        }
+      }
+    }
+  ]
+}
