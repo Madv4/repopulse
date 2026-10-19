@@ -32,3 +32,10 @@ class Settings(BaseSettings):
     embedding_revision: str = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L6-v2"
     reranker_revision: str = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
+    guard_input_validation: bool = True
+    guard_injection_detection: bool = True
+    guard_untrusted_wrapping: bool = True
+    guard_output_redaction: bool = True
+    guard_structured_validation: bool = True
+    guard_citation_verification: bool = True
+    guard_action_gate: bool = True

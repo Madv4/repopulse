@@ -15,6 +15,7 @@ from repopulse.agent import Answer, RepoPulseAgent
 from repopulse.config import Settings
 from repopulse.github.client import GitHubClient
 from repopulse.github.models import GitHubRateLimitError
+from repopulse.guardrails import Guardrails
 from repopulse.ingestion.chunking import FixedChunker, StructureChunker
 from repopulse.ingestion.embed import LocalEmbedder
 from repopulse.ingestion.github import RepositoryIngestor
@@ -43,6 +44,18 @@ def _show_answer(answer: Answer, trace: TraceWriter) -> None:
     print(answer.model_dump_json(indent=2, ensure_ascii=True))
 
 
+def _guardrails(settings: Settings) -> Guardrails:
+    return Guardrails(
+        input_validation=settings.guard_input_validation,
+        injection_detection=settings.guard_injection_detection,
+        untrusted_wrapping=settings.guard_untrusted_wrapping,
+        output_redaction=settings.guard_output_redaction,
+        structured_validation=settings.guard_structured_validation,
+        citation_verification=settings.guard_citation_verification,
+        action_gate=settings.guard_action_gate,
+    )
+
+
 async def _ask(
     question: str, repo: str, settings: Settings, max_steps: int, token_budget: int
 ) -> None:
@@ -65,6 +78,7 @@ async def _ask(
             progress=lambda message: print(message, file=sys.stderr, flush=True),
             trace=trace,
             long_term_memory=MemoryStore(settings.memory_db_path),
+            guardrails=_guardrails(settings),
         )
         answer = await agent.ask(question, repo)
         _show_answer(answer, trace)
@@ -101,6 +115,7 @@ async def _chat(repo: str, settings: Settings, max_steps: int, token_budget: int
                 trace=trace,
                 session_memory=session_memory,
                 long_term_memory=long_term_memory,
+                guardrails=_guardrails(settings),
             )
             _show_answer(await agent.ask(question, repo), trace)
 

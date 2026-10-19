@@ -4,7 +4,7 @@ RepoPulse is a local-first project for answering questions about GitHub reposito
 
 ## Status: Phase 4 complete
 
-The project ingests GitHub issues, pull requests, comments, and commits into local ChromaDB, then answers repository questions with a LangGraph agent using eight read-only MCP tools. The agent replans when evidence is insufficient, retries tool failures with backoff, stops at configured step and token budgets, and returns a Pydantic answer with citations on every claim. Phase 4 adds in-process conversation memory and policy-gated SQLite facts and preferences. A recorded GitHub snapshot drives offline tests and retrieval evaluation. **Full prompt-injection guardrails, the answer evaluation suite, full tracing, and the scripted demo are scheduled for later phases.**
+The project ingests GitHub issues, pull requests, comments, and commits into local ChromaDB, then answers repository questions with a LangGraph agent using eight read-only MCP tools. The agent replans when evidence is insufficient, retries tool failures with backoff, stops at configured step and token budgets, and returns a Pydantic answer with citations on every claim. Phase 4 adds in-process conversation memory and policy-gated SQLite facts and preferences. Phase 5 adds input, injection, output, citation, and action guardrails. A recorded GitHub snapshot drives offline tests and retrieval evaluation. The answer evaluation suite, full tracing, and scripted demo are scheduled for later phases.
 
 ## Quickstart
 
@@ -42,9 +42,13 @@ Ask a question after `make setup`; local semantic search uses the cached embeddi
 .venv/bin/repopulse ask "Which changes affect styling?" --repo pallets/click --max-steps 8 --token-budget 8000
 ```
 
-On Windows, use `.\.venv\Scripts\repopulse.exe`. The command starts the bundled MCP server over stdio, loads the cached embedding model once before accepting tool calls, and prints progress to stderr while it plans and searches. The first `ask` in a new process can take tens of seconds while Python loads the local model; it does not download weights. Each MCP tool call has a 60-second timeout. A timed-out tool is retried within the step limit, and the answer includes a limitation if it still fails. The command prints validated, ASCII-safe JSON with `summary`, `key_changes`, `risks`, `limitations`, `degraded`, and `degradation_reasons`. Each claim has a `citations` array containing retrieved issue, PR, or commit URLs. Each claim can be paraphrased but must carry a retrieved evidence ID and a verbatim quote span of at most 30 words; the verifier checks the quote in that exact passage. If an LLM step fails or its claims lack support, the answer is marked degraded, a visible `DEGRADED` line explains why, and a safe JSONL event is written under `traces/`. You can run the standalone server with `python -m repopulse.mcp_server` from the virtual environment.
+On Windows, use `.\.venv\Scripts\repopulse.exe`. The command starts the bundled MCP server over stdio, loads the cached embedding model once before accepting tool calls, and prints progress to stderr while it plans and searches. The first `ask` in a new process can take tens of seconds while Python loads the local model; it does not download weights. Each MCP tool call has a 60-second timeout. A timed-out tool is retried within the step limit, and the answer includes a limitation if it still fails. The command prints validated, ASCII-safe JSON with `summary`, `key_changes`, `risks`, `limitations`, `degraded`, and `degradation_reasons`. Each claim has a `citations` array containing retrieved issue, PR, or commit URLs. Each claim can be paraphrased but must carry a retrieved evidence ID and a verbatim quote span of at most 30 words; the verifier checks the quote in that exact passage. If an LLM step fails or its claims lack support, the answer is marked degraded, a visible `DEGRADED` line explains why, and a JSONL event is written under ignored `traces/` (failed model output is locally traced with secrets redacted). You can run the standalone server with `python -m repopulse.mcp_server` from the virtual environment.
 
 The default Ollama path is local and free. `LLM_PROVIDER=mock` is a network-free deterministic smoke path; its default response is not an answer and may produce an empty, degraded result. GitHub REST calls from `ask` still need connectivity unless responses are cached. Unit tests use the recorded fixture and a mock LLM, with no GitHub or model download requests. The sentence-transformers weights are fetched once by `make setup`/`make models` and then loaded from `.repopulse/models` in local-only mode; tests do not load them.
+
+## Guardrails
+
+All Phase 5 guards default to enabled. Set `GUARD_INPUT_VALIDATION`, `GUARD_INJECTION_DETECTION`, `GUARD_UNTRUSTED_WRAPPING`, `GUARD_OUTPUT_REDACTION`, `GUARD_STRUCTURED_VALIDATION`, `GUARD_CITATION_VERIFICATION`, or `GUARD_ACTION_GATE` to `false` in `.env` to ablate one at a time. Write requests return an `action_plan` with `dry_run: true` and require explicit confirmation; RepoPulse has no write execution tool. See [threat model](docs/THREAT_MODEL.md) for attack coverage and limitations.
 
 ## Memory
 
@@ -93,7 +97,7 @@ The exact fixture hash, pinned model revisions, and per-query results are in the
 2. **Ingestion and retrieval:** local MiniLM embeddings, ChromaDB, two chunkers, reranking, measured retrieval evaluation — complete.
 3. **MCP server and LangGraph agent loop** — complete.
 4. **Short-term and SQLite memory with explicit storage policy** — complete.
-5. Prompt-injection guardrails and broader semantic citation verification.
+5. Input, injection, output, citation, and action guardrails (complete).
 6. Full deterministic answer evaluation suite and baseline comparisons.
 7. JSONL tracing and viewer.
 8. CI, polished demo, and interview documentation.
@@ -129,4 +133,4 @@ flowchart LR
 
 ## Limitations
 
-The agent's token budget uses a documented character-based reservation when the provider cannot report token usage, plus the provider's reported usage when available. It caps each requested completion and stops further calls at the budget, but exact tokenization varies by provider. Quote grounding permits paraphrased claims but does not prove semantic entailment. Phase 5 adds prompt-injection defenses. GitHub's unauthenticated primary limit is [60 requests per hour](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api); fresh local cache entries avoid repeat calls and stale entries use conditional requests. The Chroma cache and SQLite memory can hold private local data and should be treated accordingly.
+The agent's token budget uses a documented character-based reservation when the provider cannot report token usage, plus the provider's reported usage when available. It caps each requested completion and stops further calls at the budget, but exact tokenization varies by provider. Quote grounding permits paraphrased claims but does not prove semantic entailment. Phase 5 adds configurable prompt-injection defenses. GitHub's unauthenticated primary limit is [60 requests per hour](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api); fresh local cache entries avoid repeat calls and stale entries use conditional requests. The Chroma cache and SQLite memory can hold private local data and should be treated accordingly.

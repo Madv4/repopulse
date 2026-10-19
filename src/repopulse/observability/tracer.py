@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
+from repopulse.guardrails import redact
+
 
 class DegradationEvent(BaseModel):
     """A safe reason code with no prompt, source text, or credentials."""
@@ -23,6 +25,15 @@ class ValidationEvent(BaseModel):
     stage: str
     raw_output: str
     error: str
+
+
+class QuarantineEvent(BaseModel):
+    """Metadata about excluded source text, without copying its payload."""
+
+    timestamp: datetime
+    event: str = "quarantine"
+    evidence_id: str
+    reasons: list[str]
 
 
 class TraceWriter:
@@ -43,7 +54,19 @@ class TraceWriter:
         """Preserve failed structured output for local diagnosis."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         event = ValidationEvent(
-            timestamp=datetime.now(UTC), stage=stage, raw_output=raw_output, error=error
+            timestamp=datetime.now(UTC),
+            stage=stage,
+            raw_output=redact(raw_output),
+            error=redact(error),
+        )
+        with self.path.open("a", encoding="utf-8") as output:
+            output.write(event.model_dump_json() + "\n")
+
+    def quarantine(self, evidence_id: str, reasons: list[str]) -> None:
+        """Record exclusion of a suspicious retrieved passage."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        event = QuarantineEvent(
+            timestamp=datetime.now(UTC), evidence_id=evidence_id, reasons=reasons
         )
         with self.path.open("a", encoding="utf-8") as output:
             output.write(event.model_dump_json() + "\n")
