@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     github_max_retries: int = Field(default=2, ge=0, le=5)
     model_cache_dir: Path = Path(".repopulse/models")
     chroma_dir: Path = Path(".repopulse/chroma")
+    memory_db_path: Path = Path(".repopulse/memory.sqlite3")
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_revision: str = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L6-v2"

@@ -73,8 +73,8 @@ def test_hard_step_cap_counts_tool_calls() -> None:
     answer = run(RepoPulseAgent(provider, gateway, max_steps=2))
     assert len(gateway.calls) == 2
     assert any("step limit" in item for item in answer.limitations)
-    assert answer.summary is not None
-    assert answer.summary.citations == [EVIDENCE.url]
+    assert answer.summary is None
+    assert answer.degraded
 
 
 def test_token_budget_blocks_further_llm_and_tool_calls() -> None:
@@ -164,8 +164,8 @@ def test_every_final_claim_cites_retrieved_evidence() -> None:
 
 def test_default_mock_still_works_offline() -> None:
     answer = run(RepoPulseAgent(MockProvider(), FakeGateway()))
-    assert answer.summary is not None
-    assert answer.summary.citations == [EVIDENCE.url]
+    assert answer.summary is None
+    assert answer.degraded
 
 
 def test_claim_requires_support_from_its_own_citation() -> None:
@@ -198,10 +198,9 @@ def test_claim_requires_support_from_its_own_citation() -> None:
             "Which issue reported ANSI color handling?", "pallets/click"
         )
     )
-    assert answer.summary is not None
-    assert answer.summary.citations == [EVIDENCE.url]
-    assert answer.summary.text == EVIDENCE.title
+    assert answer.summary is None
     assert answer.degraded
+    assert any("unsupported" in reason for reason in answer.degradation_reasons)
 
 
 def test_llm_fallback_marks_answer_degraded_and_traces_reason(tmp_path: Path) -> None:

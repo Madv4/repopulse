@@ -175,7 +175,9 @@ class ToolService:
                 Evidence(
                     url=hit.chunk.url,
                     kind=hit.chunk.kind,
-                    title=hit.chunk.source_id,
+                    title=_text(
+                        hit.chunk.text.partition("\n")[0].strip() or hit.chunk.source_id, 300
+                    ),
                     excerpt=_text(hit.chunk.text),
                 )
                 for hit in hits

@@ -12,6 +12,7 @@ from repopulse.config import Settings
 from repopulse.github.models import GitHubRateLimitError
 from repopulse.llm.base import ProviderError
 from repopulse.llm.mock import MockProvider
+from repopulse.memory import MemoryStore
 from repopulse.observability.tracer import TraceWriter
 
 
@@ -94,3 +95,28 @@ def test_doctor_live_reports_rejected_model_without_traceback(
     error = capsys.readouterr().err
     assert "HTTP 404" in error
     assert "Traceback" not in error
+
+
+def test_memory_cli_add_list_and_forget_offline(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    settings = Settings(
+        _env_file=None, llm_provider="mock", memory_db_path=tmp_path / "memory.sqlite3"
+    )
+    monkeypatch.setattr(cli, "Settings", lambda: settings)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["repopulse", "memory", "add", "I care about auth changes.", "--repo", "pallets/click"],
+    )
+    cli.main()
+    added = json.loads(capsys.readouterr().out)
+    assert added["source"] == "user"
+    monkeypatch.setattr(sys, "argv", ["repopulse", "memory", "list", "--repo", "pallets/click"])
+    cli.main()
+    listed = json.loads(capsys.readouterr().out)
+    assert [row["id"] for row in listed] == [added["id"]]
+    monkeypatch.setattr(sys, "argv", ["repopulse", "memory", "forget", added["id"]])
+    cli.main()
+    assert "Forgot memory" in capsys.readouterr().out
+    assert MemoryStore(settings.memory_db_path).list_active() == []

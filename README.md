@@ -2,9 +2,9 @@
 
 RepoPulse is a local-first project for answering questions about GitHub repositories with traceable evidence. The finished design will combine live GitHub REST data, local embeddings, a persistent vector store, a planning agent, memory, guardrails, evaluation, and traces. Development is deliberately staged so each phase can be tested and committed independently.
 
-## Status: Phase 3 complete
+## Status: Phase 4 complete
 
-The project ingests GitHub issues, pull requests, comments, and commits into local ChromaDB, then answers repository questions with a LangGraph agent using eight read-only MCP tools. The agent replans when evidence is insufficient, retries tool failures with backoff, stops at configured step and token budgets, and returns a Pydantic answer with citations on every claim. A recorded GitHub snapshot drives offline tests and retrieval evaluation. **Memory, full prompt-injection guardrails, the answer evaluation suite, tracing, and the scripted demo are scheduled for later phases.**
+The project ingests GitHub issues, pull requests, comments, and commits into local ChromaDB, then answers repository questions with a LangGraph agent using eight read-only MCP tools. The agent replans when evidence is insufficient, retries tool failures with backoff, stops at configured step and token budgets, and returns a Pydantic answer with citations on every claim. Phase 4 adds in-process conversation memory and policy-gated SQLite facts and preferences. A recorded GitHub snapshot drives offline tests and retrieval evaluation. **Full prompt-injection guardrails, the answer evaluation suite, full tracing, and the scripted demo are scheduled for later phases.**
 
 ## Quickstart
 
@@ -44,7 +44,20 @@ Ask a question after `make setup`; local semantic search uses the cached embeddi
 
 On Windows, use `.\.venv\Scripts\repopulse.exe`. The command starts the bundled MCP server over stdio, loads the cached embedding model once before accepting tool calls, and prints progress to stderr while it plans and searches. The first `ask` in a new process can take tens of seconds while Python loads the local model; it does not download weights. Each MCP tool call has a 60-second timeout. A timed-out tool is retried within the step limit, and the answer includes a limitation if it still fails. The command prints validated, ASCII-safe JSON with `summary`, `key_changes`, `risks`, `limitations`, `degraded`, and `degradation_reasons`. Each claim has a `citations` array containing retrieved issue, PR, or commit URLs. To keep citation checking deterministic, a claim must copy text from a cited title or passage; paraphrases are rejected. If an LLM step fails or its claims lack support, the answer is marked degraded, a visible `DEGRADED` line explains why, and a safe JSONL event is written under `traces/`. You can run the standalone server with `python -m repopulse.mcp_server` from the virtual environment.
 
-The default Ollama path is local and free. `LLM_PROVIDER=mock` is a network-free deterministic smoke path; it can produce a cited source title when evidence is available, but it is not a meaningful natural-language answer. GitHub REST calls from `ask` still need connectivity unless responses are cached. Unit tests use the recorded fixture and a mock LLM, with no GitHub or model download requests. The sentence-transformers weights are fetched once by `make setup`/`make models` and then loaded from `.repopulse/models` in local-only mode; tests do not load them.
+The default Ollama path is local and free. `LLM_PROVIDER=mock` is a network-free deterministic smoke path; its default response is not an answer and may produce an empty, degraded result. GitHub REST calls from `ask` still need connectivity unless responses are cached. Unit tests use the recorded fixture and a mock LLM, with no GitHub or model download requests. The sentence-transformers weights are fetched once by `make setup`/`make models` and then loaded from `.repopulse/models` in local-only mode; tests do not load them.
+
+## Memory
+
+The agent reads relevant active memories before planning. Add only facts or preferences you want to keep across commands:
+
+```sh
+.venv/bin/repopulse memory add "I care most about the auth rewrite." --kind preference --repo pallets/click
+.venv/bin/repopulse memory list --repo pallets/click
+.venv/bin/repopulse memory forget MEMORY_ID
+.venv/bin/repopulse chat --repo pallets/click
+```
+
+On Windows, replace `.venv/bin/repopulse` with `.\.venv\Scripts\repopulse.exe`. `chat` keeps the last six questions and their cited URLs in memory while that process stays open; type `exit` to end the session. `ask` is a single-turn command. Long-term records live in ignored `.repopulse/memory.sqlite3` and include a timestamp, source, confidence, repository scope, and optional expiry. `memory add` always records user provenance; `--kind fact`, `--confidence 0.8`, and `--expires YYYY-MM-DD` are available. The expiry date is active through the end of that UTC day. Expired records are hidden on reads; `forget` deletes a record by ID. No GitHub tool result or issue comment is automatically saved to SQLite. See the [memory policy](docs/DESIGN.md#phase-4) for exact acceptance rules and the explicit verified-summary API.
 
 Public GitHub reads need no token. [GitHub allows 60 unauthenticated REST requests per hour and generally 5,000 per hour with a personal access token](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api). A GitHub token is free and separate from the Groq API key. For a larger ingest window, put `GITHUB_TOKEN=...` in the local Git-ignored `.env` to raise the limit. Keep using the read-only public-repository scope you need. Cached responses are stored under `.repopulse/github-cache` by default and ignored by Git.
 
@@ -79,8 +92,8 @@ The exact fixture hash, pinned model revisions, and per-query results are in the
 1. **Foundations:** package, config, providers, GitHub client, cache, offline tests — complete.
 2. **Ingestion and retrieval:** local MiniLM embeddings, ChromaDB, two chunkers, reranking, measured retrieval evaluation — complete.
 3. **MCP server and LangGraph agent loop** — complete.
-4. Persistent memory and storage policy.
-5. Prompt-injection guardrails and citation verification.
+4. **Short-term and SQLite memory with explicit storage policy** — complete.
+5. Prompt-injection guardrails and broader semantic citation verification.
 6. Full deterministic answer evaluation suite and baseline comparisons.
 7. JSONL tracing and viewer.
 8. CI, polished demo, and interview documentation.
@@ -110,8 +123,10 @@ flowchart LR
     MCP --> GitHub
     MCP --> Retrieve
     Agent --> Answer[Cited Pydantic answer]
+    Memory[SQLite long-term memory] --> Agent
+    Session[In-process conversation state] --> Agent
 ```
 
 ## Limitations
 
-The agent's token budget uses a documented character-based reservation when the provider cannot report token usage, plus the provider's reported usage when available. It caps each requested completion and stops further calls at the budget, but exact tokenization varies by provider. Phase 5 will add claim-level evidence support checks and injection defenses; Phase 3 verifies that every retained citation URL came from retrieved evidence. GitHub's unauthenticated primary limit is [60 requests per hour](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api); fresh local cache entries avoid repeat calls and stale entries use conditional requests. The Chroma cache can hold private text when using a PAT and must be treated as local private data.
+The agent's token budget uses a documented character-based reservation when the provider cannot report token usage, plus the provider's reported usage when available. It caps each requested completion and stops further calls at the budget, but exact tokenization varies by provider. Current claim support is extractive: paraphrases are dropped even when semantically correct. Phase 5 will add broader citation verification and prompt-injection defenses. GitHub's unauthenticated primary limit is [60 requests per hour](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api); fresh local cache entries avoid repeat calls and stale entries use conditional requests. The Chroma cache and SQLite memory can hold private local data and should be treated accordingly.

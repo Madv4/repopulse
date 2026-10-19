@@ -3,16 +3,17 @@
 import asyncio
 import json
 import re
-import unicodedata
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal, Protocol, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field, ValidationError
 
+from repopulse.agent.citations import supports_text
 from repopulse.github.client import GitHubClient
 from repopulse.llm.base import ChatMessage, LLMProvider, ProviderError
 from repopulse.mcp_server import Evidence, ToolEvidence
+from repopulse.memory import MemoryStore, SessionMemory
 from repopulse.observability.tracer import TraceWriter
 
 TOOL_NAMES = frozenset(
@@ -111,18 +112,6 @@ def _json_object(text: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _normalized(text: str) -> str:
-    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", text)).strip().casefold()
-
-
-def _supports_claim(claim: Claim, evidence: Evidence) -> bool:
-    """A citation supports only text copied from its retrieved title or passage."""
-    wanted = _normalized(claim.text)
-    return bool(wanted) and any(
-        wanted in _normalized(source) for source in (evidence.title, evidence.excerpt)
-    )
-
-
 class RepoPulseAgent:
     """Plan, call MCP tools and synthesize within hard graph limits."""
 
@@ -137,6 +126,8 @@ class RepoPulseAgent:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         progress: Callable[[str], None] | None = None,
         trace: TraceWriter | None = None,
+        session_memory: SessionMemory | None = None,
+        long_term_memory: MemoryStore | None = None,
     ) -> None:
         if max_steps < 1 or token_budget < 1 or max_replans < 0:
             raise ValueError("agent limits must be positive (max_replans may be zero)")
@@ -148,6 +139,8 @@ class RepoPulseAgent:
         self.sleep = sleep
         self.progress = progress
         self.trace = trace
+        self.session_memory = session_memory or SessionMemory()
+        self.long_term_memory = long_term_memory
         graph = StateGraph(AgentState)
         graph.add_node("plan", self._plan)
         graph.add_node("select", self._select)
@@ -227,6 +220,17 @@ class RepoPulseAgent:
                     "repo": state["repo"],
                     "previous": state["plan"],
                     "found_urls": [e.url for e in state["evidence"]],
+                    "session": [turn.model_dump() for turn in self.session_memory.recent()],
+                    "memories": [
+                        record.model_dump(
+                            include={"text", "kind", "source", "repo", "confidence"}
+                        )
+                        for record in (
+                            self.long_term_memory.relevant(state["question"], state["repo"])
+                            if self.long_term_memory is not None
+                            else []
+                        )
+                    ],
                 },
             )
             plan = Plan.model_validate(_json_object(text))
@@ -387,6 +391,7 @@ class RepoPulseAgent:
                 "No citable issue, pull request or commit evidence was retrieved."
             )
             return self._finish_answer(state, answer)
+        synthesis_failed = False
         try:
             text = self._complete(
                 state,
@@ -394,7 +399,9 @@ class RepoPulseAgent:
                 "risks:[{text,citations}]. Every claim must cite retrieved issue, "
                 "PR or commit URLs. "
                 "Copy claim text exactly from the cited evidence title or excerpt. "
-                "Do not paraphrase or invent facts. Omit unsupported claims.",
+                "For a summary, copy the shortest relevant title or sentence; the citation "
+                "URL identifies the issue, PR, or commit. Do not paraphrase or invent facts. "
+                "If no source answers the question, use summary:null and empty lists.",
                 {
                     "question": state["question"],
                     "evidence": [
@@ -407,11 +414,9 @@ class RepoPulseAgent:
             )
             proposed = Answer.model_validate(_json_object(text))
         except (BudgetExhausted, ProviderError, ValidationError) as exc:
-            first = next(iter(sources.values()))[0]
-            proposed = Answer(summary=Claim(text=first.title, citations=[first.url]))
-            answer.limitations.append(
-                "LLM synthesis was unavailable; summary uses a retrieved title."
-            )
+            synthesis_failed = True
+            proposed = Answer()
+            answer.limitations.append("LLM synthesis was unavailable; no answer claim was issued.")
             reason = (
                 self._provider_failure("Synthesis", exc)
                 if isinstance(exc, ProviderError)
@@ -428,7 +433,8 @@ class RepoPulseAgent:
                 dict.fromkeys(
                     url
                     for url in claim.citations
-                    if url in sources and any(_supports_claim(claim, item) for item in sources[url])
+                    if url in sources
+                    and any(supports_text(claim.text, item) for item in sources[url])
                 )
             )
             return Claim(text=claim.text, citations=valid) if valid else None
@@ -436,11 +442,14 @@ class RepoPulseAgent:
         answer.summary = grounded(proposed.summary)
         answer.key_changes = [valid for item in proposed.key_changes if (valid := grounded(item))]
         answer.risks = [valid for item in proposed.risks if (valid := grounded(item))]
-        if answer.summary is None and not answer.key_changes and not answer.risks:
-            first = next(iter(sources.values()))[0]
-            answer.summary = Claim(text=first.title, citations=[first.url])
+        if (
+            answer.summary is None
+            and not answer.key_changes
+            and not answer.risks
+            and not synthesis_failed
+        ):
             answer.limitations.append(
-                "No supported LLM claims were returned; summary uses a retrieved title."
+                "No supported LLM claims were returned; no answer claim was issued."
             )
             self._degrade(state, "Synthesis claims were unsupported by their cited evidence.")
         if proposed.summary is not None and answer.summary is None:
@@ -471,4 +480,6 @@ class RepoPulseAgent:
         result = final["answer"]
         if result is None:
             raise RuntimeError("agent ended without an answer")
-        return Answer.model_validate(result)
+        answer = Answer.model_validate(result)
+        self.session_memory.remember(question, answer)
+        return answer

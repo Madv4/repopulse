@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 from datetime import UTC, date, datetime, time
@@ -21,6 +22,7 @@ from repopulse.ingestion.store import ChromaStore
 from repopulse.llm.base import ChatMessage, ProviderError
 from repopulse.llm.factory import create_provider
 from repopulse.mcp_gateway import MCPGateway
+from repopulse.memory import MemoryStore, SessionMemory
 from repopulse.observability.tracer import TraceWriter
 from repopulse.retrieval.rerank import LocalCrossEncoderReranker
 from repopulse.retrieval.retriever import Retriever
@@ -28,6 +30,10 @@ from repopulse.retrieval.retriever import Retriever
 
 def _midnight(value: str) -> datetime:
     return datetime.combine(date.fromisoformat(value), time.min, tzinfo=UTC)
+
+
+def _end_of_day(value: str) -> datetime:
+    return datetime.combine(date.fromisoformat(value), time.max, tzinfo=UTC)
 
 
 def _show_answer(answer: Answer, trace: TraceWriter) -> None:
@@ -58,9 +64,45 @@ async def _ask(
             token_budget=token_budget,
             progress=lambda message: print(message, file=sys.stderr, flush=True),
             trace=trace,
+            long_term_memory=MemoryStore(settings.memory_db_path),
         )
         answer = await agent.ask(question, repo)
         _show_answer(answer, trace)
+
+
+async def _chat(repo: str, settings: Settings, max_steps: int, token_budget: int) -> None:
+    """Keep short-term conversation state alive for an interactive CLI session."""
+    print("Loading the cached local embedding model...", file=sys.stderr, flush=True)
+    params = StdioServerParameters(
+        command=sys.executable, args=["-m", "repopulse.mcp_server"], env=os.environ.copy()
+    )
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as mcp_session:
+        await mcp_session.initialize()
+        session_memory = SessionMemory()
+        long_term_memory = MemoryStore(settings.memory_db_path)
+        provider = create_provider(settings)
+        print("Enter questions; type exit to finish.", file=sys.stderr, flush=True)
+        while True:
+            try:
+                question = await asyncio.to_thread(input, "repopulse> ")
+            except (EOFError, KeyboardInterrupt):
+                break
+            if question.strip().lower() in {"exit", "quit"}:
+                break
+            if not question.strip():
+                continue
+            trace = TraceWriter(Path("traces"))
+            agent = RepoPulseAgent(
+                provider,
+                MCPGateway(mcp_session),
+                max_steps=max_steps,
+                token_budget=token_budget,
+                progress=lambda message: print(message, file=sys.stderr, flush=True),
+                trace=trace,
+                session_memory=session_memory,
+                long_term_memory=long_term_memory,
+            )
+            _show_answer(await agent.ask(question, repo), trace)
 
 
 def main() -> None:
@@ -89,6 +131,22 @@ def main() -> None:
     ask.add_argument("--repo", required=True, help="owner/name")
     ask.add_argument("--max-steps", type=int, default=8)
     ask.add_argument("--token-budget", type=int, default=8000)
+    chat = commands.add_parser("chat", help="Ask multiple questions in one memory session")
+    chat.add_argument("--repo", required=True, help="owner/name")
+    chat.add_argument("--max-steps", type=int, default=8)
+    chat.add_argument("--token-budget", type=int, default=8000)
+    memory = commands.add_parser("memory", help="Manage durable SQLite memory")
+    memory_actions = memory.add_subparsers(dest="memory_action", required=True)
+    memory_list = memory_actions.add_parser("list", help="List active memories")
+    memory_list.add_argument("--repo", help="Include global and this repo's memories")
+    memory_add = memory_actions.add_parser("add", help="Save an explicit user fact or preference")
+    memory_add.add_argument("text")
+    memory_add.add_argument("--repo", help="Scope to owner/name")
+    memory_add.add_argument("--kind", choices=["preference", "fact"], default="preference")
+    memory_add.add_argument("--confidence", type=float, default=1.0)
+    memory_add.add_argument("--expires", help="Last active UTC day, YYYY-MM-DD")
+    memory_forget = memory_actions.add_parser("forget", help="Delete a memory by ID")
+    memory_forget.add_argument("id")
     args = parser.parse_args()
     settings = Settings()
     if args.command == "doctor":
@@ -179,6 +237,30 @@ def main() -> None:
             print(hit.chunk.text[:300].replace("\n", " "))
     elif args.command == "ask":
         asyncio.run(_ask(args.question, args.repo, settings, args.max_steps, args.token_budget))
+    elif args.command == "chat":
+        asyncio.run(_chat(args.repo, settings, args.max_steps, args.token_budget))
+    elif args.command == "memory":
+        memory_store = MemoryStore(settings.memory_db_path)
+        if args.memory_action == "list":
+            records = memory_store.list_active(repo=args.repo)
+            print(json.dumps([row.model_dump(mode="json") for row in records], indent=2))
+        elif args.memory_action == "add":
+            try:
+                expires_at = _end_of_day(args.expires) if args.expires else None
+                record = memory_store.add_user(
+                    args.text,
+                    kind=args.kind,
+                    repo=args.repo,
+                    confidence=args.confidence,
+                    expires_at=expires_at,
+                )
+            except ValueError:
+                parser.exit(2, "Memory rejected: check text, repo, confidence, and expiry.\n")
+            print(record.model_dump_json(indent=2, ensure_ascii=True))
+        elif args.memory_action == "forget":
+            if not memory_store.forget(args.id):
+                parser.exit(2, "Memory ID not found.\n")
+            print(f"Forgot memory {args.id}")
 
 
 if __name__ == "__main__":
