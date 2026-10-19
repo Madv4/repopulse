@@ -36,6 +36,18 @@ class QuarantineEvent(BaseModel):
     reasons: list[str]
 
 
+class ClaimRejectionEvent(BaseModel):
+    """Local evidence for why a generated claim failed quote grounding."""
+
+    timestamp: datetime
+    event: str = "claim_rejection"
+    claim: str
+    quote: str
+    evidence_id: str
+    evidence_text: str
+    reason: str
+
+
 class TraceWriter:
     """Append safe degradation events to one local run trace."""
 
@@ -67,6 +79,22 @@ class TraceWriter:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         event = QuarantineEvent(
             timestamp=datetime.now(UTC), evidence_id=evidence_id, reasons=reasons
+        )
+        with self.path.open("a", encoding="utf-8") as output:
+            output.write(event.model_dump_json() + "\n")
+
+    def claim_rejection(
+        self, claim: str, quote: str, evidence_id: str, evidence_text: str, reason: str
+    ) -> None:
+        """Record a failed claim with cited text, redacting secrets and contact details."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        event = ClaimRejectionEvent(
+            timestamp=datetime.now(UTC),
+            claim=redact(claim),
+            quote=redact(quote),
+            evidence_id=evidence_id,
+            evidence_text=redact(evidence_text),
+            reason=reason,
         )
         with self.path.open("a", encoding="utf-8") as output:
             output.write(event.model_dump_json() + "\n")

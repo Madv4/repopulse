@@ -1,7 +1,6 @@
 """Configurable boundaries around repository questions and untrusted evidence."""
 
 import re
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -96,14 +95,18 @@ def detect_injection(evidence: Evidence) -> Detection:
 
 def untrusted_block(evidence: Evidence) -> str:
     """Encode source text so delimiters inside a source cannot close its block."""
-    data: dict[str, Any] = evidence.model_dump()
-    # JSON escaping prevents source text from becoming a real boundary tag.
-    import json
+
+    def escaped(value: str) -> str:
+        return value.replace("<", "\\u003c")
 
     return (
         f'<untrusted_data evidence_id="{evidence.evidence_id}">\n'
-        + json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
-        + "\n</untrusted_data>"
+        f"Evidence ID: {evidence.evidence_id}\n"
+        f"URL: {escaped(evidence.url)}\n"
+        f"Kind: {escaped(evidence.kind)}\n"
+        f"Title:\n{escaped(evidence.title)}\n"
+        f"Excerpt:\n{escaped(evidence.excerpt)}\n"
+        "</untrusted_data>"
     )
 
 

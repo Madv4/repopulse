@@ -19,7 +19,11 @@ def supports_text(text: str, evidence: Evidence) -> bool:
 
 
 def quote_in_evidence(quote: str, evidence: Evidence) -> bool:
-    """Require a case-sensitive verbatim span of at most 30 words."""
+    """Require a source span of at most 30 words after Unicode/space normalization."""
     if not quote.strip() or len(quote.split()) > 30:
         return False
-    return any(quote in source for source in (evidence.title, evidence.excerpt))
+    def normalized(value: str) -> str:
+        return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip()
+
+    wanted = normalized(quote)
+    return any(wanted in normalized(source) for source in (evidence.title, evidence.excerpt))

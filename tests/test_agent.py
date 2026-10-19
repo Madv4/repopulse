@@ -276,29 +276,120 @@ def test_paraphrased_claim_with_valid_quote_passes() -> None:
 
 
 def test_fabricated_quote_fails() -> None:
+    answer_text = json.dumps(
+        {
+            "summary": {
+                "text": "An invented claim.",
+                "evidence": [
+                    {
+                        "evidence_id": EVIDENCE.evidence_id,
+                        "quote": "This fabricated sentence is not in the issue.",
+                    }
+                ],
+            }
+        }
+    )
     provider = MockProvider(
         [
             '{"subquestions":["find ANSI issue"]}',
             '{"tool":"semantic_search","args":{"query":"ANSI"}}',
             '{"action":"enough"}',
-            json.dumps(
-                {
-                    "summary": {
-                        "text": "An invented claim.",
-                        "evidence": [
-                            {
-                                "evidence_id": EVIDENCE.evidence_id,
-                                "quote": "This fabricated sentence is not in the issue.",
-                            }
-                        ],
-                    }
-                }
-            ),
+            answer_text,
+            answer_text,
         ]
     )
     answer = run(RepoPulseAgent(provider, FakeGateway()))
     assert answer.summary is None
     assert answer.degraded
+
+
+def test_quote_normalizes_line_breaks_but_not_fabrication() -> None:
+    from repopulse.agent.citations import quote_in_evidence
+
+    source = Evidence(
+        url=EVIDENCE.url,
+        kind="issue",
+        title="café report",
+        excerpt="Shell completion can execute parameter callbacks while Click is only trying to\n"
+        "determine completion information.",
+    )
+    assert quote_in_evidence(
+        "Shell completion can execute parameter callbacks while Click is only trying to "
+        "determine completion information.",
+        source,
+    )
+    assert quote_in_evidence("cafe\u0301 report", source)
+    assert not quote_in_evidence("The issue says all callbacks are disabled.", source)
+
+
+def test_synthesis_retries_once_with_failed_quote_feedback(tmp_path: Path) -> None:
+    trace = TraceWriter(tmp_path / "traces")
+    bad = json.dumps(
+        {
+            "summary": {
+                "text": "The ANSI issue was reported.",
+                "evidence": [{"evidence_id": EVIDENCE.evidence_id, "quote": "fabricated quote"}],
+            }
+        }
+    )
+    good = json.dumps(
+        {
+            "summary": {
+                "text": "The ANSI issue was reported.",
+                "evidence": [{"evidence_id": EVIDENCE.evidence_id, "quote": EVIDENCE.title}],
+            }
+        }
+    )
+    provider = MockProvider(
+        [
+            '{"subquestions":["find ANSI issue"]}',
+            '{"tool":"semantic_search","args":{"query":"ANSI"}}',
+            '{"action":"enough"}',
+            bad,
+            good,
+        ]
+    )
+    answer = run(RepoPulseAgent(provider, FakeGateway(), trace=trace))
+    assert answer.summary is not None
+    assert not answer.degraded
+    assert "quote_not_in_evidence" in provider.calls[-1][-1].content
+    events = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
+    assert events[0]["event"] == "claim_rejection"
+    assert events[0]["quote"] == "fabricated quote"
+    assert EVIDENCE.title in events[0]["evidence_text"]
+
+
+def test_planning_json_mode_http_400_retries_without_degrading() -> None:
+    from repopulse.llm.base import ProviderError
+
+    planning_attempts = 0
+
+    def respond(messages: object) -> str:
+        nonlocal planning_attempts
+        assert isinstance(messages, tuple)
+        instruction = messages[0].content
+        if "subquestions" in instruction:
+            planning_attempts += 1
+            if planning_attempts == 1:
+                raise ProviderError("LLM service returned HTTP 400")
+            return '{"subquestions":["find ANSI issue"]}'
+        if '"tool"' in instruction:
+            return '{"tool":"semantic_search","args":{"query":"ANSI"}}'
+        if '"action"' in instruction:
+            return '{"action":"enough"}'
+        return json.dumps(
+            {
+                "summary": {
+                    "text": "The ANSI issue was reported.",
+                    "evidence": [{"evidence_id": EVIDENCE.evidence_id, "quote": EVIDENCE.title}],
+                }
+            }
+        )
+
+    answer = run(RepoPulseAgent(MockProvider(responder=respond), FakeGateway()))
+    assert planning_attempts == 2
+    assert answer.summary is not None
+    assert not answer.degraded
 
 
 def test_planner_retries_validation_with_error_and_traces_raw(tmp_path: Path) -> None:

@@ -236,10 +236,25 @@ class RepoPulseAgent:
         *,
         output_limit: int = 512,
         feedback: str | None = None,
+        json_mode: bool = True,
     ) -> str:
+        evidence_blocks = payload.get("evidence")
+        if (
+            isinstance(evidence_blocks, list)
+            and evidence_blocks
+            and all(isinstance(item, str) for item in evidence_blocks)
+        ):
+            context = {key: value for key, value in payload.items() if key != "evidence"}
+            user_content = (
+                json.dumps(context, ensure_ascii=False)
+                + "\n\nRetrieved evidence (source text follows):\n"
+                + "\n\n".join(evidence_blocks)
+            )
+        else:
+            user_content = json.dumps(payload, ensure_ascii=False)
         messages = [
             ChatMessage(role="system", content=instruction),
-            ChatMessage(role="user", content=json.dumps(payload, ensure_ascii=False)),
+            ChatMessage(role="user", content=user_content),
         ]
         if feedback is not None:
             messages.append(ChatMessage(role="user", content=f"Fix your JSON: {feedback}"))
@@ -249,7 +264,7 @@ class RepoPulseAgent:
         if remaining < 1:
             raise BudgetExhausted
         response = self.provider.complete(
-            messages, max_output_tokens=min(remaining, output_limit), json_mode=True
+            messages, max_output_tokens=min(remaining, output_limit), json_mode=json_mode
         )
         used = max(
             estimate + max(1, len(response.text) // 4),
@@ -267,13 +282,30 @@ class RepoPulseAgent:
         schema: type[Structured],
         *,
         output_limit: int = 512,
+        initial_feedback: str | None = None,
     ) -> Structured:
         """Validate a JSON response, retrying once with the validation error."""
-        feedback: str | None = None
+        feedback: str | None = initial_feedback
+        json_mode = True
         for attempt in range(2):
-            raw = self._complete(
-                state, instruction, payload, output_limit=output_limit, feedback=feedback
-            )
+            try:
+                raw = self._complete(
+                    state,
+                    instruction,
+                    payload,
+                    output_limit=output_limit,
+                    feedback=feedback,
+                    json_mode=json_mode,
+                )
+            except ProviderError as exc:
+                if attempt == 0 and "HTTP 400" in str(exc):
+                    feedback = (
+                        "The provider rejected JSON mode with HTTP 400. "
+                        "Return a single valid JSON object matching the requested schema."
+                    )
+                    json_mode = False
+                    continue
+                raise
             try:
                 return schema.model_validate(_json_object(raw))
             except (ValueError, ValidationError) as exc:
@@ -492,66 +524,112 @@ class RepoPulseAgent:
                 "No citable issue, pull request or commit evidence was retrieved."
             )
             return self._finish_answer(state, answer)
-        synthesis_failed = False
-        try:
-            proposed = self._structured(
-                state,
-                "synthesis",
-                "Return JSON with summary:{text,evidence:[{evidence_id,quote}]}, "
-                "key_changes:[{text,evidence:[{evidence_id,quote}]}], and "
-                "risks:[{text,evidence:[{evidence_id,quote}]}]. Claim text may paraphrase, "
-                "but every claim must include a verbatim source quote of at most 30 words "
-                "and the corresponding retrieved evidence_id. "
-                "If no source answers the question, use summary:null and empty lists."
-                + self._data_instruction(),
-                {
-                    "question": state["question"],
-                    "evidence": self._evidence_payload(
-                        [e for e in state["evidence"] if e.kind in CITABLE_KINDS][:8]
-                    ),
-                },
-                Answer,
-                output_limit=1024,
-            )
-        except (BudgetExhausted, ProviderError, ValidationError) as exc:
-            synthesis_failed = True
-            proposed = Answer()
-            answer.limitations.append("LLM synthesis was unavailable; no answer claim was issued.")
-            reason = (
-                self._provider_failure("Synthesis", exc)
-                if isinstance(exc, ProviderError)
-                else "Synthesis LLM returned invalid structured output."
-                if isinstance(exc, ValidationError)
-                else "Synthesis LLM skipped because the token budget was exhausted."
-            )
-            self._degrade(state, reason)
 
-        def grounded(claim: Claim | None) -> Claim | None:
+        def grounded(claim: Claim | None) -> tuple[Claim | None, list[str]]:
             if claim is None:
-                return None
-            if not all(ref.evidence_id in sources for ref in claim.evidence):
-                return None
-            if self.guardrails.citation_verification and not all(
-                quote_in_evidence(ref.quote, sources[ref.evidence_id]) for ref in claim.evidence
-            ):
-                return None
+                return None, []
+            failures: list[str] = []
+            for ref in claim.evidence:
+                source = sources.get(ref.evidence_id)
+                reason = (
+                    "evidence_id_not_retrieved"
+                    if source is None
+                    else "quote_exceeds_30_words"
+                    if len(ref.quote.split()) > 30
+                    else "quote_not_in_evidence"
+                    if self.guardrails.citation_verification
+                    and not quote_in_evidence(ref.quote, source)
+                    else None
+                )
+                if reason is not None:
+                    evidence_text = "" if source is None else f"{source.title}\n{source.excerpt}"
+                    failures.append(f"{ref.evidence_id}: {reason} for quote {ref.quote!r}")
+                    if self.trace is not None:
+                        self.trace.claim_rejection(
+                            claim.text, ref.quote, ref.evidence_id, evidence_text, reason
+                        )
+            if failures:
+                return None, failures
             urls = list(dict.fromkeys(sources[ref.evidence_id].url for ref in claim.evidence))
-            return Claim(text=claim.text, evidence=claim.evidence, citations=urls)
+            return Claim(text=claim.text, evidence=claim.evidence, citations=urls), []
 
-        answer.summary = grounded(proposed.summary)
-        answer.key_changes = [valid for item in proposed.key_changes if (valid := grounded(item))]
-        answer.risks = [valid for item in proposed.risks if (valid := grounded(item))]
-        if (
-            answer.summary is None
-            and not answer.key_changes
-            and not answer.risks
-            and not synthesis_failed
-        ):
-            answer.limitations.append(
-                "No supported LLM claims were returned; no answer claim was issued."
+        instruction = (
+            "Return JSON with summary:{text,evidence:[{evidence_id,quote}]}, "
+            "key_changes:[{text,evidence:[{evidence_id,quote}]}], and "
+            "risks:[{text,evidence:[{evidence_id,quote}]}]. Claim text may paraphrase. "
+            "Copy each quote directly from the Title or Excerpt of the SAME evidence ID "
+            "shown below. Each quote is at most 30 words; preserve wording and punctuation. "
+            "Line-break whitespace is normalized during verification. "
+            "If no source answers the question, use summary:null and empty lists."
+            + self._data_instruction()
+        )
+        payload = {
+            "question": state["question"],
+            "evidence": self._evidence_payload(
+                [e for e in state["evidence"] if e.kind in CITABLE_KINDS][:8]
+            ),
+        }
+        synthesis_failed = False
+        proposed_summary = False
+        feedback: str | None = None
+        for attempt in range(2):
+            try:
+                proposed = self._structured(
+                    state,
+                    "synthesis",
+                    instruction,
+                    payload,
+                    Answer,
+                    output_limit=1024,
+                    initial_feedback=feedback,
+                )
+            except (BudgetExhausted, ProviderError, ValidationError) as exc:
+                synthesis_failed = True
+                if answer.summary is None and not answer.key_changes and not answer.risks:
+                    answer.limitations.append(
+                        "LLM synthesis was unavailable; no answer claim was issued."
+                    )
+                reason = (
+                    self._provider_failure("Synthesis", exc)
+                    if isinstance(exc, ProviderError)
+                    else "Synthesis LLM returned invalid structured output."
+                    if isinstance(exc, ValidationError)
+                    else "Synthesis LLM skipped because the token budget was exhausted."
+                )
+                self._degrade(state, reason)
+                break
+            proposed_summary = proposed.summary is not None
+            summary, summary_failures = grounded(proposed.summary)
+            changes = [grounded(item) for item in proposed.key_changes]
+            risks = [grounded(item) for item in proposed.risks]
+            failures = summary_failures + [
+                failure for _, errors in [*changes, *risks] for failure in errors
+            ]
+            candidate_changes = [item for item, _ in changes if item is not None]
+            candidate_risks = [item for item, _ in risks if item is not None]
+            if (summary is not None or candidate_changes or candidate_risks) or attempt == 1:
+                answer.summary = summary
+                answer.key_changes = candidate_changes
+                answer.risks = candidate_risks
+            if not failures:
+                break
+            feedback = (
+                "The previous claims failed quote grounding: "
+                + "; ".join(failures)[:1000]
+                + ". Copy exact spans from the displayed evidence IDs, or omit unsupported claims."
             )
-            self._degrade(state, "Synthesis claims were unsupported by their cited evidence.")
-        if proposed.summary is not None and answer.summary is None:
+            if attempt == 0:
+                continue
+            if answer.summary is None and not answer.key_changes and not answer.risks:
+                self._degrade(state, "Synthesis claims were unsupported by their cited evidence.")
+        if answer.summary is None and not answer.key_changes and not answer.risks:
+            if not synthesis_failed:
+                answer.limitations.append(
+                    "No supported LLM claims were returned; no answer claim was issued."
+                )
+            if feedback is not None:
+                self._degrade(state, "Synthesis claims were unsupported by their cited evidence.")
+        if proposed_summary and answer.summary is None:
             answer.limitations.append("An uncited summary was removed.")
         return self._finish_answer(state, answer)
 
