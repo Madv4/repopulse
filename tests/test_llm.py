@@ -33,13 +33,16 @@ def test_ollama_request_and_usage() -> None:
         assert request.url.path == "/api/chat"
         body = json.loads(request.content)
         assert body["stream"] is False
+        assert body["options"]["num_predict"] == 7
         assert body["messages"][1] == {"role": "user", "content": "Hi"}
         return httpx.Response(
             200, json={"message": {"content": "hello"}, "prompt_eval_count": 2, "eval_count": 3}
         )
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    result = OllamaProvider("test", "http://127.0.0.1:11434/", client).complete(MESSAGES)
+    result = OllamaProvider("test", "http://127.0.0.1:11434/", client).complete(
+        MESSAGES, max_output_tokens=7
+    )
     assert (result.text, result.prompt_tokens, result.completion_tokens) == ("hello", 2, 3)
 
 
@@ -47,6 +50,7 @@ def test_groq_request_and_usage() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/openai/v1/chat/completions"
         assert request.headers["Authorization"] == "Bearer secret"
+        assert json.loads(request.content)["max_completion_tokens"] == 7
         return httpx.Response(
             200,
             json={
@@ -56,7 +60,7 @@ def test_groq_request_and_usage() -> None:
         )
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    result = GroqProvider("test", "secret", client).complete(MESSAGES)
+    result = GroqProvider("test", "secret", client).complete(MESSAGES, max_output_tokens=7)
     assert (result.text, result.prompt_tokens, result.completion_tokens) == ("hello", 4, 5)
 
 
@@ -65,6 +69,7 @@ def test_gemini_request_and_usage() -> None:
         assert request.url.path.endswith("/models/test:generateContent")
         assert request.headers["x-goog-api-key"] == "secret"
         body = json.loads(request.content)
+        assert body["generationConfig"]["maxOutputTokens"] == 7
         assert body["systemInstruction"]["parts"][0]["text"] == "Be concise"
         assert body["contents"] == [{"role": "user", "parts": [{"text": "Hi"}]}]
         return httpx.Response(
@@ -76,7 +81,7 @@ def test_gemini_request_and_usage() -> None:
         )
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    result = GeminiProvider("test", "secret", client).complete(MESSAGES)
+    result = GeminiProvider("test", "secret", client).complete(MESSAGES, max_output_tokens=7)
     assert (result.text, result.prompt_tokens, result.completion_tokens) == ("hello", 6, 7)
 
 

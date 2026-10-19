@@ -80,6 +80,29 @@ def test_pagination_follows_next_link_and_caches_pages(tmp_path: Path) -> None:
         client.get_paginated("/repos/a/b/issues", max_pages=1)
 
 
+def test_issue_search_and_commit_list_use_bounded_single_pages(tmp_path: Path) -> None:
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.path == "/search/issues":
+            assert request.url.params["q"] == "repo:a/b is:issue colors"
+            assert request.url.params["per_page"] == "2"
+            return httpx.Response(200, json={"items": [{"number": 1}, {"number": 2}]})
+        assert request.url.path == "/repos/a/b/commits"
+        assert request.url.params["per_page"] == "1"
+        return httpx.Response(200, json=[{"sha": "abc"}], headers={
+            "Link": '<https://api.github.com/repos/a/b/commits?page=2>; rel="next"'
+        })
+
+    client = GitHubClient(
+        settings(tmp_path), client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    assert len(client.search_issues("a/b", "colors", limit=2)) == 2
+    assert client.list_commits("a/b", limit=1) == [{"sha": "abc"}]
+    assert len(calls) == 2
+
+
 def test_rate_limit_is_not_retried(tmp_path: Path) -> None:
     calls = 0
 

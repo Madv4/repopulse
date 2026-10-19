@@ -64,3 +64,24 @@ Plain Python remains the fit for ingestion, chunking, and retrieval because thes
 - [GitHub issue REST API](https://docs.github.com/en/rest/issues/issues)
 - [GitHub issue comments](https://docs.github.com/en/rest/issues/comments)
 - [GitHub PR review comments](https://docs.github.com/en/rest/pulls/comments)
+
+## Phase 3
+
+### MCP boundary and agent graph
+
+The official `mcp` Python SDK/FastMCP server exposes eight read-only tools over stdio: `search_issues`, `get_issue`, `get_pull_request`, `get_pr_files`, `list_commits`, `list_milestones`, `list_releases`, and `semantic_search`. Handlers return a small typed evidence envelope with bounded excerpts and source URLs. The CLI starts the same server as a subprocess and calls it through an MCP `ClientSession`; the agent sees only a `ToolGateway` protocol. Unit tests replace that gateway with recorded results, and an integration test starts a fixture-backed server over real MCP stdio. GitHub list tools request one bounded page. Semantic search opens cached local embeddings and Chroma only when invoked.
+
+LangGraph owns the explicit `plan -> select -> execute -> observe -> decide -> synthesize` transitions. The decision can continue, replan, synthesize after enough evidence, or stop. At most three replans follow the initial plan. Every MCP attempt, including retry attempts, consumes a step. Tool errors use two exponential-backoff retries, then add a limitation and allow the graph to use other evidence. A selected tool name is validated against the eight-tool allowlist; the requested repository is replaced with the validated CLI repository before execution.
+
+The agent reserves an estimated prompt budget from message length, sends the remaining per-call output cap to the selected provider, and counts the greater of estimated or provider-reported usage. It will not make another LLM call when that accounting budget cannot fit the prompt. This is a hard control-flow budget, but provider tokenizers differ, so a single call's reported usage can exceed the estimate; the agent then stops. The mock provider can return explicit usage in tests. The maximum tool-step cap is exact.
+
+The synthesizer validates an `Answer` Pydantic object containing a summary claim, key-change claims, risk claims, and limitations. Each retained claim must have at least one citation URL retrieved from an issue, pull request, or commit. Milestone and release records can guide search but cannot serve as final citations. If the LLM gives no grounded claim, the agent uses a retrieved title with its source URL and states that synthesis was unavailable. Phase 5 will check whether claim text is actually supported by cited passages and add prompt-injection defenses; URL membership alone is the Phase 3 boundary.
+
+All Phase 3 tests are offline and use the pinned recorded `pallets/click` fields plus the scripted mock LLM. The fixture intentionally lacks PR-file, milestone, and release lists, so tests verify empty outputs for those tools instead of inventing records. `make eval` remains the Phase 2 retrieval evaluation. Its near-perfect small-fixture scores are not treated as comparative evidence; the planned harder Phase 6 set is described in `docs/EVALUATION.md`.
+
+### Sources checked
+
+- [MCP Python SDK server and client examples](https://github.com/modelcontextprotocol/python-sdk)
+- [LangGraph StateGraph reference](https://langchain-ai.github.io/langgraph/reference/graphs/)
+- [Groq chat completions API](https://console.groq.com/docs/api-reference)
+- [Gemini generateContent API](https://ai.google.dev/api/generate-content)

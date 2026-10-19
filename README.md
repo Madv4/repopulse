@@ -2,9 +2,9 @@
 
 RepoPulse is a local-first project for answering questions about GitHub repositories with traceable evidence. The finished design will combine live GitHub REST data, local embeddings, a persistent vector store, a planning agent, memory, guardrails, evaluation, and traces. Development is deliberately staged so each phase can be tested and committed independently.
 
-## Status: Phase 2 complete
+## Status: Phase 3 complete
 
-The project now ingests GitHub issues, pull requests and their comments, and commits for a UTC date window. It chunks the records with fixed or structure-aware strategies, embeds them locally with `all-MiniLM-L6-v2`, and stores them in persistent ChromaDB. A local cross-encoder can rerank retrieval results. A recorded GitHub snapshot drives an offline retrieval comparison. **The agent, MCP server, memory, guardrails, full answer evaluation suite, tracing, and scripted demo are not implemented yet.**
+The project ingests GitHub issues, pull requests, comments, and commits into local ChromaDB, then answers repository questions with a LangGraph agent using eight read-only MCP tools. The agent replans when evidence is insufficient, retries tool failures with backoff, stops at configured step and token budgets, and returns a Pydantic answer with citations on every claim. A recorded GitHub snapshot drives offline tests and retrieval evaluation. **Memory, full prompt-injection guardrails, the answer evaluation suite, tracing, and the scripted demo are scheduled for later phases.**
 
 ## Quickstart
 
@@ -32,6 +32,17 @@ $env:LLM_PROVIDER = "mock"
 ```
 
 The default provider is Ollama. Install Ollama separately, pull a local model such as `llama3.1:8b`, and run its local server before calling the Ollama adapter. Set `LLM_PROVIDER=groq` with `GROQ_API_KEY`, or `LLM_PROVIDER=gemini` with `GEMINI_API_KEY`, to use the optional free-tier hosted providers. The provider choice is explicit and tests use `mock` with no network. Copy `.env.example` to `.env` to customize settings. `.env` is ignored by Git.
+
+Ask a question after `make setup`; local semantic search uses the cached embedding model and an ingested collection, while the other tools read public GitHub REST endpoints through the cache:
+
+```sh
+.venv/bin/repopulse ask "Which issue reported ANSI color handling?" --repo pallets/click
+.venv/bin/repopulse ask "Which changes affect styling?" --repo pallets/click --max-steps 8 --token-budget 8000
+```
+
+On Windows, use `.\.venv\Scripts\repopulse.exe`. The command starts the bundled MCP server over stdio, calls the LangGraph agent, and prints validated JSON with `summary`, `key_changes`, `risks`, and `limitations`. Each claim has a `citations` array containing retrieved issue, PR, or commit URLs. If no citable source is found, the claim fields remain empty and `limitations` explains why. You can run the standalone server with `python -m repopulse.mcp_server` from the virtual environment.
+
+The default Ollama path is local and free. `LLM_PROVIDER=mock` is a network-free deterministic smoke path; it can produce a cited source title when evidence is available, but it is not a meaningful natural-language answer. GitHub REST calls from `ask` still need connectivity unless responses are cached. Unit tests use the recorded fixture and a mock LLM, with no GitHub or model download requests. The sentence-transformers weights are fetched once by `make setup`/`make models` and then loaded from `.repopulse/models` in local-only mode; tests do not load them.
 
 Public GitHub reads need no token. `GITHUB_TOKEN` is optional and raises the primary REST rate limit. Cached responses are stored under `.repopulse/github-cache` by default and ignored by Git.
 
@@ -63,14 +74,14 @@ The exact fixture hash, pinned model revisions, and per-query results are in the
 
 1. **Foundations:** package, config, providers, GitHub client, cache, offline tests — complete.
 2. **Ingestion and retrieval:** local MiniLM embeddings, ChromaDB, two chunkers, reranking, measured retrieval evaluation — complete.
-3. MCP server and LangGraph agent loop.
+3. **MCP server and LangGraph agent loop** — complete.
 4. Persistent memory and storage policy.
 5. Prompt-injection guardrails and citation verification.
 6. Full deterministic answer evaluation suite and baseline comparisons.
 7. JSONL tracing and viewer.
 8. CI, polished demo, and interview documentation.
 
-`make eval` currently runs the Phase 2 retrieval benchmark; Phase 6 will expand it to answer quality, guardrail, and ablation evaluation. `make demo` becomes functional in Phase 8. See [design decisions](docs/DESIGN.md) for the architecture and trade-offs.
+`make eval` currently runs the Phase 2 retrieval benchmark; Phase 6 will expand it to answer quality, guardrail, ablation, and harder retrieval evaluation. `make demo` becomes functional in Phase 8. See [design decisions](docs/DESIGN.md) for the architecture and trade-offs.
 
 ## Current architecture
 
@@ -90,8 +101,13 @@ flowchart LR
     Embed --> Chroma[Persistent ChromaDB]
     Chroma --> Retrieve[Vector retrieval]
     Retrieve --> Rerank[Optional local cross-encoder]
+    Ask[ask CLI] --> Agent[LangGraph plan and tool loop]
+    Agent --> MCP[Local MCP stdio tools]
+    MCP --> GitHub
+    MCP --> Retrieve
+    Agent --> Answer[Cited Pydantic answer]
 ```
 
 ## Limitations
 
-Phase 2 provides evidence search, not a synthesized repository Q&A answer. GitHub's unauthenticated primary limit is [60 requests per hour](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api); fresh local cache entries avoid repeat calls and stale entries use conditional requests. The client raises a clear rate-limit exception rather than sleeping for a potentially long reset period. The Chroma cache can hold private text when using a PAT and must be treated as local private data. Hosted LLM availability and free-tier quotas are set by their providers; the local Ollama and mock paths need no hosted LLM account.
+The agent's token budget uses a documented character-based reservation when the provider cannot report token usage, plus the provider's reported usage when available. It caps each requested completion and stops further calls at the budget, but exact tokenization varies by provider. Phase 5 will add claim-level evidence support checks and injection defenses; Phase 3 verifies that every retained citation URL came from retrieved evidence. GitHub's unauthenticated primary limit is [60 requests per hour](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api); fresh local cache entries avoid repeat calls and stale entries use conditional requests. The Chroma cache can hold private text when using a PAT and must be treated as local private data.

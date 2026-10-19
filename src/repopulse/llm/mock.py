@@ -10,7 +10,7 @@ class MockProvider(LLMProvider):
 
     def __init__(
         self,
-        responses: Iterable[str] | None = None,
+        responses: Iterable[str | LLMResponse] | None = None,
         *,
         fallback: str = "Mock response",
         responder: Callable[[tuple[ChatMessage, ...]], str] | None = None,
@@ -25,10 +25,13 @@ class MockProvider(LLMProvider):
         """Return the provider name."""
         return "mock"
 
-    def complete(self, messages: Sequence[ChatMessage]) -> LLMResponse:
+    def complete(
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None
+    ) -> LLMResponse:
         """Return a deterministic scripted completion without network access."""
         call = tuple(messages)
         self.calls.append(call)
+        text: str | LLMResponse
         if self._responder is not None:
             text = self._responder(call)
         elif self._responses is not None:
@@ -38,4 +41,4 @@ class MockProvider(LLMProvider):
                 raise ProviderError("Mock response script exhausted") from exc
         else:
             text = self._fallback
-        return LLMResponse(text=text, model="mock")
+        return text if isinstance(text, LLMResponse) else LLMResponse(text=text, model="mock")

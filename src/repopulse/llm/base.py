@@ -37,7 +37,9 @@ class LLMProvider(ABC):
         """Return the configured provider name."""
 
     @abstractmethod
-    def complete(self, messages: Sequence[ChatMessage]) -> LLMResponse:
+    def complete(
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None
+    ) -> LLMResponse:
         """Generate one response from ordered conversation messages."""
 
 

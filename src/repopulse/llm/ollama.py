@@ -28,12 +28,21 @@ class OllamaProvider(LLMProvider):
         """Return the provider name."""
         return "ollama"
 
-    def complete(self, messages: Sequence[ChatMessage]) -> LLMResponse:
+    def complete(
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None
+    ) -> LLMResponse:
         """Request a non-streaming Ollama completion."""
+        payload: dict[str, object] = {
+            "model": self.model,
+            "messages": [m.model_dump() for m in messages],
+            "stream": False,
+        }
+        if max_output_tokens is not None:
+            payload["options"] = {"num_predict": max_output_tokens}
         data = post_json(
             self.client,
             f"{self.base_url}/api/chat",
-            {"model": self.model, "messages": [m.model_dump() for m in messages], "stream": False},
+            payload,
         )
         message = data.get("message")
         if not isinstance(message, dict):

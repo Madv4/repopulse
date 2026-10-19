@@ -201,6 +201,19 @@ class GitHubClient:
             f"{self.repo_path(repo)}/issues", {"state": state, "per_page": 100}
         )
 
+    def search_issues(self, repo: str, query: str, *, limit: int = 5) -> list[dict[str, Any]]:
+        """Search issues in one repository, excluding pull requests."""
+        self.repo_path(repo)
+        if not query.strip():
+            raise ValueError("search query must not be empty")
+        response = self.get(
+            "/search/issues",
+            {"q": f"repo:{repo} is:issue {query}", "per_page": min(max(limit, 1), 20)},
+        )
+        if not isinstance(response.data, dict) or not isinstance(response.data.get("items"), list):
+            raise GitHubAPIError("GitHub issue search returned an unexpected shape")
+        return cast(list[dict[str, Any]], response.data["items"])[:limit]
+
     def get_issue(self, repo: str, number: int) -> GitHubResponse:
         """Fetch one issue."""
         return self.get(f"{self.repo_path(repo)}/issues/{number}")
@@ -209,23 +222,42 @@ class GitHubClient:
         """Fetch one pull request."""
         return self.get(f"{self.repo_path(repo)}/pulls/{number}")
 
-    def get_pr_files(self, repo: str, number: int) -> list[dict[str, Any]]:
+    def get_pr_files(self, repo: str, number: int, *, limit: int = 10) -> list[dict[str, Any]]:
         """Fetch changed-file metadata for a pull request."""
-        return self.get_paginated(f"{self.repo_path(repo)}/pulls/{number}/files", {"per_page": 100})
-
-    def list_commits(self, repo: str) -> list[dict[str, Any]]:
-        """List repository commits."""
-        return self.get_paginated(f"{self.repo_path(repo)}/commits", {"per_page": 100})
-
-    def list_milestones(self, repo: str) -> list[dict[str, Any]]:
-        """List repository milestones."""
-        return self.get_paginated(
-            f"{self.repo_path(repo)}/milestones", {"state": "all", "per_page": 100}
+        response = self.get(
+            f"{self.repo_path(repo)}/pulls/{number}/files", {"per_page": min(max(limit, 1), 100)}
         )
+        if not isinstance(response.data, list):
+            raise GitHubAPIError("GitHub PR files returned an unexpected shape")
+        return response.data[:limit]
 
-    def list_releases(self, repo: str) -> list[dict[str, Any]]:
+    def list_commits(self, repo: str, *, limit: int = 5) -> list[dict[str, Any]]:
+        """List repository commits."""
+        response = self.get(
+            f"{self.repo_path(repo)}/commits", {"per_page": min(max(limit, 1), 100)}
+        )
+        if not isinstance(response.data, list):
+            raise GitHubAPIError("GitHub commits returned an unexpected shape")
+        return response.data[:limit]
+
+    def list_milestones(self, repo: str, *, limit: int = 5) -> list[dict[str, Any]]:
+        """List repository milestones."""
+        response = self.get(
+            f"{self.repo_path(repo)}/milestones",
+            {"state": "all", "per_page": min(max(limit, 1), 100)},
+        )
+        if not isinstance(response.data, list):
+            raise GitHubAPIError("GitHub milestones returned an unexpected shape")
+        return response.data[:limit]
+
+    def list_releases(self, repo: str, *, limit: int = 5) -> list[dict[str, Any]]:
         """List repository releases."""
-        return self.get_paginated(f"{self.repo_path(repo)}/releases", {"per_page": 100})
+        response = self.get(
+            f"{self.repo_path(repo)}/releases", {"per_page": min(max(limit, 1), 100)}
+        )
+        if not isinstance(response.data, list):
+            raise GitHubAPIError("GitHub releases returned an unexpected shape")
+        return response.data[:limit]
 
     def list_issues_since(self, repo: str, since: str) -> list[dict[str, Any]]:
         """List issues and PR summaries updated since an ISO 8601 timestamp."""

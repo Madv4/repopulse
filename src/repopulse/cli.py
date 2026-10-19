@@ -1,8 +1,15 @@
-"""Local RepoPulse setup, ingestion and retrieval commands."""
+"""RepoPulse setup, ingestion, retrieval and cited-answer commands."""
 
 import argparse
+import asyncio
+import os
+import sys
 from datetime import UTC, date, datetime, time
 
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+from repopulse.agent import RepoPulseAgent
 from repopulse.config import Settings
 from repopulse.github.client import GitHubClient
 from repopulse.ingestion.chunking import FixedChunker, StructureChunker
@@ -10,12 +17,34 @@ from repopulse.ingestion.embed import LocalEmbedder
 from repopulse.ingestion.github import RepositoryIngestor
 from repopulse.ingestion.store import ChromaStore
 from repopulse.llm.factory import create_provider
+from repopulse.mcp_gateway import MCPGateway
 from repopulse.retrieval.rerank import LocalCrossEncoderReranker
 from repopulse.retrieval.retriever import Retriever
 
 
 def _midnight(value: str) -> datetime:
     return datetime.combine(date.fromisoformat(value), time.min, tzinfo=UTC)
+
+
+async def _ask(
+    question: str, repo: str, settings: Settings, max_steps: int, token_budget: int
+) -> None:
+    """Run the agent against this installation's local MCP stdio server."""
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "repopulse.mcp_server"],
+        env=os.environ.copy(),
+    )
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        agent = RepoPulseAgent(
+            create_provider(settings),
+            MCPGateway(session),
+            max_steps=max_steps,
+            token_budget=token_budget,
+        )
+        answer = await agent.ask(question, repo)
+        print(answer.model_dump_json(indent=2))
 
 
 def main() -> None:
@@ -36,6 +65,11 @@ def main() -> None:
     search.add_argument("--strategy", choices=["fixed", "structure"], default="structure")
     search.add_argument("--k", type=int, default=5)
     search.add_argument("--rerank", action="store_true")
+    ask = commands.add_parser("ask", help="Answer a repository question with cited evidence")
+    ask.add_argument("question")
+    ask.add_argument("--repo", required=True, help="owner/name")
+    ask.add_argument("--max-steps", type=int, default=8)
+    ask.add_argument("--token-budget", type=int, default=8000)
     args = parser.parse_args()
     settings = Settings()
     if args.command == "doctor":
@@ -100,6 +134,8 @@ def main() -> None:
         ):
             print(f"{rank}. {hit.chunk.url}  distance={hit.distance:.4f}")
             print(hit.chunk.text[:300].replace("\n", " "))
+    elif args.command == "ask":
+        asyncio.run(_ask(args.question, args.repo, settings, args.max_steps, args.token_budget))
 
 
 if __name__ == "__main__":

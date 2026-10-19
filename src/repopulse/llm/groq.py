@@ -30,12 +30,20 @@ class GroqProvider(LLMProvider):
         """Return the provider name."""
         return "groq"
 
-    def complete(self, messages: Sequence[ChatMessage]) -> LLMResponse:
+    def complete(
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None
+    ) -> LLMResponse:
         """Request a Groq chat completion."""
+        payload: dict[str, object] = {
+            "model": self.model,
+            "messages": [m.model_dump() for m in messages],
+        }
+        if max_output_tokens is not None:
+            payload["max_completion_tokens"] = max_output_tokens
         data = post_json(
             self.client,
             "https://api.groq.com/openai/v1/chat/completions",
-            {"model": self.model, "messages": [m.model_dump() for m in messages]},
+            payload,
             headers={"Authorization": f"Bearer {self._api_key}"},
         )
         choices = data.get("choices")
