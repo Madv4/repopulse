@@ -3,5 +3,7 @@
   "retrieval_k": 3,
   "live_case_count": 10,
   "live_sleep_seconds": 30,
-  "attack_live_sleep_seconds": 6
+  "attack_live_sleep_seconds": 6,
+  "benign_fp_live_sleep_seconds": 6,
+  "benign_fp_live_model": "openai/gpt-oss-20b"
 }

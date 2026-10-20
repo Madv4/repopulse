@@ -106,6 +106,48 @@ Attack comments still reaching the mock LLM agent after both screens:
 The v2 set was evaluated once after the classifier was committed. Screening rates are distinct from live attack success rates.
 <!-- measured-attack-results:end -->
 
+## Benign-comment false positives (heuristic only; live Groq classifier)
+
+The original 400-item Click snapshot records comment **counts** but not comment
+bodies. `evals/fixtures/click_benign_comments.json` is a separate, committed
+capture of 200 real public issue/PR comments whose parent IDs are in that
+unchanged snapshot. Its metadata pins the parent SHA-256 and selection rule;
+the comments span 113 parents. There are no planted attacks in this sample.
+Each screen saw the same parent title and first 1,800 body characters of each
+comment. The classifier was called independently on all 200 comments, including
+the one the heuristic would reject, so the two standalone rates and their union
+share a denominator. Treat these as **false-positive proxies**: public origin
+does not prove that every comment is harmless, and this per-comment test does
+not exercise the agent's additional same-source combined screen.
+
+| Screen | Quarantined benign comments | False-positive proxy rate |
+| --- | ---: | ---: |
+| Heuristic only | 1/200 | 0.005 |
+| Live Groq classifier only (`openai/gpt-oss-20b`) | 0/200 | 0.000 |
+| Heuristic + live Groq classifier, union | 1/200 | 0.005 |
+
+The screens overlap on 0 comments. These counts come from
+`evals/reports/benign_fp.json`; `make eval-benign-live` regenerates the report
+from the committed comment fixture and cached or live classifier decisions.
+The earlier attack-screening run used `openai/gpt-oss-120b`, while this benign
+audit used `openai/gpt-oss-20b` after the former reached its free-tier rolling
+token quota. The two runs do **not** establish a same-model attack-block versus
+false-positive trade-off. A complete benign false-positive run for the default
+120b classifier has not been measured.
+
+Only **one** false positive was observed, so listing ten examples would require
+inventing nine. The actual example is
+[#5632079126](https://github.com/pallets/click/pull/3827#issuecomment-5632079126)
+on PR #3827. It argues that Python keywords such as `from` and `in` are useful
+CLI option names and links to the Python documentation. The heuristic's
+`markdown_link` pattern sees `key` in the benign `#keywords` URL fragment;
+the live Groq classifier cleared the comment. Quarantining it would likely
+hurt an answer about whether Click should reject keyword-derived parameter
+names, because it removes a concrete objection from the discussion. That
+answer-quality impact is an inference from the text, not a measured answer
+accuracy difference. The PR body still provides broader context, so a general
+summary might remain adequate.
+
 ## Optional live provider check (live Groq)
 
 `make eval-live` runs exactly 10 labeled questions through the configured Groq provider, sleeps between calls according to `live_sleep_seconds`, and retries a rate-limited case once after an additional pause. It requires a Groq free-tier key and existing local Click ingestion. It writes `evals/reports/live_latest.md` and `live_latest.json`. It is separate from CI and the offline suite. The labeled URLs come from the pinned capture while live GitHub and local ingested state may have changed; the reported URL match is a rule-based check, not semantic answer grading. No live numbers are claimed here until that command has run.
