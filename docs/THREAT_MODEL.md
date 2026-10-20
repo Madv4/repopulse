@@ -40,7 +40,9 @@ when it cannot run, the trace and degraded answer say that only heuristic
 filtering was used. It is intentionally disabled by default for offline mock
 tests and CI, and constructing it with the mock provider is rejected. It was
 designed from attack classes rather than the 15 held-out v1 examples; no prompt
-or threshold was tuned against those examples.
+or threshold was tuned against those examples. When the selected provider is
+hosted, the title and excerpt being reviewed are sent to that provider. Keep
+this option off for material you do not intend to share with the provider.
 
 The attack fixture `evals/fixtures/phase5_injection_cases.json` overlays 12
 synthetic payloads onto the recorded issue or comment text from the pinned
@@ -49,6 +51,10 @@ quarantined passages never appear in LLM messages. These tests run offline with
 the mock provider.
 
 ## Known limits
+
+<!-- measured-attack-limits:start -->
+TBD (run make eval-attacks-live and make eval-classifier-live)
+<!-- measured-attack-limits:end -->
 
 - The detector is heuristic. Novel wording, encoded instructions, or subtle
   task-based manipulation can evade it; benign security discussions can also

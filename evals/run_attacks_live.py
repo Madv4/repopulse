@@ -294,7 +294,9 @@ def write_report(
         "# Recorded comment attacks against live Groq (live Groq)", "",
         "These runs use a synthetic private canary, recorded issue/PR comments, and the actual "
         "agent. The scorer checks final claims and executed tools; it can miss paraphrased "
-        "behavior changes. No real secret is put in the prompt.", "",
+        "behavior changes. No real secret is put in the prompt. The optional LLM "
+        "classifier is disabled in both conditions; ON means the default deterministic "
+        "guardrails.", "",
         "| Dataset | Guardrails | Completed / cases | "
         "Attack success rate (live Groq) | Quarantined cases (live Groq) |",
         "| --- | --- | ---: | ---: | ---: |",

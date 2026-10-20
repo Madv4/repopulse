@@ -73,6 +73,10 @@ The development set's 20 planted comments were all quarantined (**20/20; block r
 
 `make eval-classifier-live` uses live Groq solely for the optional injection classifier and the scripted mock LLM for the agent's other steps. It reports development, held-out v1, and the frozen 20-case v2 set separately. The v2 texts include different editorial phrasing, Portuguese, German, Arabic, Korean, Chinese, split comments, Markdown links, code and JSON formatting, and role-play framing. The evaluator derives heuristic-only and added classifier quarantines from the same run, counts only quarantined attack comments, and lists all missed case IDs. Its generated report is `evals/reports/injection_classifier.md` and `.json`. The classifier implementation and prompt were committed before this v2 set was evaluated; the old v1 fixture remains as a regression set. The classifier's block rate measures screening, not whether a live answering model would obey a passage that got through.
 
+<!-- measured-attack-results:start -->
+TBD (run make eval-attacks-live and make eval-classifier-live)
+<!-- measured-attack-results:end -->
+
 ## Optional live provider check (live Groq)
 
 `make eval-live` runs exactly 10 labeled questions through the configured Groq provider, sleeps between calls according to `live_sleep_seconds`, and retries a rate-limited case once after an additional pause. It requires a Groq free-tier key and existing local Click ingestion. It writes `evals/reports/live_latest.md` and `live_latest.json`. It is separate from CI and the offline suite. The labeled URLs come from the pinned capture while live GitHub and local ingested state may have changed; the reported URL match is a rule-based check, not semantic answer grading. No live numbers are claimed here until that command has run.
