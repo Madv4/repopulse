@@ -1,15 +1,43 @@
 # Evaluation methodology
 
-## Phase 2 retrieval benchmark
+## Phase 6 recorded suite
 
-The committed fixture `evals/fixtures/click_snapshot.json` records selected fields from real public `pallets/click` REST responses, with a capture timestamp and the exact API source. It contains curated issue and PR summaries, PR details, comments, and commit summaries. `evals/capture_snapshot.py` documents the capture procedure; rerunning it later creates a new snapshot and requires fresh label review. The committed fixture is the pinned corpus for the benchmark. No GitHub calls occur in `make eval`.
+`make eval` runs entirely offline after `make setup` has cached the public embedding and reranker weights. It reads the pinned `pallets/click` REST capture in `evals/fixtures/click_large_snapshot.json` (captured 2026-10-19), the 55 reviewed labels in `evals/datasets/retrieval_large.jsonl`, the 60 cases in `evals/datasets/agent_cases.jsonl`, and `evals/fixtures/synthetic_repo.json`. The capture contains 400 public issue/PR records, including 238 PRs. Every retrieval query is paraphrased; 33 include a labeled near-duplicate distractor. Twenty adversarial cases use planted issue or PR comments in the synthetic repository. The generator and capture scripts document fixture provenance, but normal evaluation never runs them or calls GitHub.
 
-The labeled dataset is `evals/datasets/retrieval.jsonl`. Each case has a question and one or more source URLs judged relevant from the captured records. Labels were chosen before the final comparison. Queries include title-level facts, commit-level facts, and details found inside comments. The fixture-integrity test checks that every labeled URL exists in the snapshot.
+The runner writes `evals/reports/latest.md` and `latest.json`. JSON includes each ranked URL, case outcome, measured latency, usage accounting, and SHA-256 fixture hashes. `evals/config.json` sets `retrieval_k` and `min_full_agent_pass_rate`; the process exits nonzero when the full agent misses that configured threshold. `make test` uses the deterministic mock and recorded fixtures without loading embedding weights or using a network connection.
 
-The runner evaluates four configurations: fixed chunks and structure-aware chunks, each with and without local cross-encoder reranking. It rebuilds the fixture repository in a dedicated local Chroma directory on each run. Both strategies use the same source documents, embedding model, ChromaDB vector search, candidate pool, `k=3`, and source-level deduplication. The reranker scores at most 20 retrieved passages per query. `hit rate@3` is the share of queries with any relevant source among the first three distinct sources. `MRR@3` averages the reciprocal rank of the first relevant source, assigning zero to a miss. The report includes actual document and chunk counts and the SHA-256 of the fixture and labels.
+## Retrieval results
 
-Run `make setup` once to cache the public model weights. Thereafter `make eval` uses the cache in local-only mode and writes `evals/reports/retrieval_report.md` plus `evals/reports/retrieval_results.json`. Unit tests inject fake vectors and never load model weights. The reports are generated from returned rankings; numbers are not hardcoded.
+Each chunker rebuilds its own local Chroma collection from the same 400 records. Local MiniLM embeddings and the optional local cross-encoder search the 55 queries. Results deduplicate by parent source. Hit rate@3 counts queries with at least one relevant URL in the first three sources. MRR@3 averages the reciprocal rank of the first relevant URL, assigning zero to misses. These are the actual results from `make eval`, rounded only for display:
 
-This is a small curated smoke benchmark on one repository. It can show regressions in this pipeline, but does not estimate general retrieval quality, answer accuracy, or prompt-injection resistance. The full answer and guardrail evaluation belongs to Phase 6.
+| Chunking | Reranker | Chunks | Hit rate@3 | MRR@3 |
+| --- | --- | ---: | ---: | ---: |
+| Fixed | Off | 1193 | 0.800 | 0.667 |
+| Fixed | On | 1193 | 0.873 | 0.806 |
+| Structure | Off | 1279 | 0.818 | 0.709 |
+| Structure | On | 1279 | 0.873 | 0.779 |
 
-The Phase 2 retrieval fixture is too easy: its near-perfect scores do not discriminate between the chunking and reranking variants. Phase 6 will add a larger, harder retrieval set built from a recorded snapshot of a real public repository, with paraphrased queries and near-duplicate distractors. The new set will remain offline and use reviewed source-URL labels.
+The earlier Phase 2 fixture had near-perfect scores across variants and offered little separation. On this larger recorded corpus, hit rate@3 ranges from 0.800 to 0.873 and MRR@3 from 0.667 to 0.806. The score spread makes the reranker comparison observable. It is still one repository and a hand-labeled query set; it does not estimate performance on all GitHub repositories.
+
+## Agent and baseline protocol
+
+The 60 cases comprise 30 ordinary questions, 20 injected issue/PR comment cases, and 10 edge or failure cases. The latter cover an empty repository, no activity, a large issue, missing fields, simulated HTTP 403/429/500 responses, and a simulated timeout. The graph uses a scripted `MockProvider` and a fixture gateway returning recorded passages or deterministic failures. Its guardrail detector quarantines suspicious comments before synthesis. The naive RAG baseline takes the top source from one unreranked retrieval and makes one call to the same scripted mock for an answer; it does no planning, retry, memory read, or guardrail filtering. It is an intentionally small baseline, not a tuned production RAG system.
+
+Pass rate is the share of all cases meeting their case label. For normal questions, the rule-based answer-accuracy check requires the labeled URL and, when provided, the recorded title. Citation correctness is measured among answers that make a summary claim: each quote must occur in its retrieved passage and each cited URL must match that passage. Injection block rate is the share of planted attacks with a quarantine trace event. Refusal rate is the share of cases with no summary. Latency is measured elapsed local process time per case. Budget units are the graph's character-based token reservation (or provider usage if greater), **not tokenizer counts**. Provider-reported prompt and completion tokens are separate; the mock reports zero. Estimated mock service cost is USD 0 because no hosted service is called. Real-provider cost is TBD (run make eval).
+
+The comparison and ablations below are generated by the current local run; consult `latest.json` for unrounded values and case-level failures.
+
+| System | Cases | Pass rate | Normal answer accuracy | Citation correctness | Injection block | Refusal |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Naive RAG | 60 | TBD (run make eval) | TBD (run make eval) | TBD (run make eval) | TBD (run make eval) | TBD (run make eval) |
+| Full agent | 60 | TBD (run make eval) | TBD (run make eval) | TBD (run make eval) | TBD (run make eval) | TBD (run make eval) |
+
+The guardrails-off ablation uses the 20 attack cases; reranker-off uses the 30 normal cases; memory-on/off each use the same 10 normal cases. These are scoped comparisons, so their pass rates should not be compared directly to the full 60-case pass rate. The scripted mock extracts the first evidence title and does not reason over memory, so memory-on/off can match even when memory was read. The local baseline and full agent have different call counts, so their latency is descriptive rather than a normalized model-speed comparison. Quote membership verifies provenance, not semantic entailment; the normal-case title check is a narrow proxy for answer correctness. Attack payloads exercise known detector patterns and do not measure coverage of unseen injection strategies.
+
+## Optional live provider check
+
+`make eval-live` runs exactly 10 labeled questions through the configured Groq provider, sleeps between calls according to `live_sleep_seconds`, and retries a rate-limited case once after an additional pause. It requires a Groq free-tier key and existing local Click ingestion. It writes `evals/reports/live_latest.md` and `live_latest.json`. It is separate from CI and the offline suite. The labeled URLs come from the pinned capture while live GitHub and local ingested state may have changed; the reported URL match is a rule-based check, not semantic answer grading. No live numbers are claimed here until that command has run.
+
+## Historical Phase 2 fixture
+
+The smaller pinned `evals/fixtures/click_snapshot.json` and `evals/datasets/retrieval.jsonl` remain for regression tests and historical comparison. They are no longer the corpus used by `make eval`; the old Phase 2 reports remain under `evals/reports/retrieval_report.md` and `retrieval_results.json`.

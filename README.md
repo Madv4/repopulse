@@ -2,13 +2,13 @@
 
 RepoPulse is a local-first project for answering questions about GitHub repositories with traceable evidence. The finished design will combine live GitHub REST data, local embeddings, a persistent vector store, a planning agent, memory, guardrails, evaluation, and traces. Development is deliberately staged so each phase can be tested and committed independently.
 
-## Status: Phase 4 complete
+## Status: Phase 6 complete
 
-The project ingests GitHub issues, pull requests, comments, and commits into local ChromaDB, then answers repository questions with a LangGraph agent using eight read-only MCP tools. The agent replans when evidence is insufficient, retries tool failures with backoff, stops at configured step and token budgets, and returns a Pydantic answer with citations on every claim. Phase 4 adds in-process conversation memory and policy-gated SQLite facts and preferences. Phase 5 adds input, injection, output, citation, and action guardrails. A recorded GitHub snapshot drives offline tests and retrieval evaluation. The answer evaluation suite, full tracing, and scripted demo are scheduled for later phases.
+The project ingests GitHub issues, pull requests, comments, and commits into local ChromaDB, then answers repository questions with a LangGraph agent using eight read-only MCP tools. The agent replans when evidence is insufficient, retries tool failures with backoff, stops at configured step and token budgets, and returns a Pydantic answer with citations on every claim. Phase 4 adds in-process conversation memory and policy-gated SQLite facts and preferences. Phase 5 adds input, injection, output, citation, and action guardrails. Phase 6 adds a recorded 400-item GitHub snapshot, 55 labeled retrieval queries, 60 offline agent cases, and baseline and ablation reports. Full tracing and the scripted demo remain for later phases.
 
 ## Quickstart
 
-Requirements: Python 3.11+ and GNU Make. On Windows, use a Python installation with `venv` and `pip`; the Makefile uses the `py -3` launcher by default. No API key, credit card, or paid service is needed for the default local path. `make setup` installs Python packages and downloads the two free model weight sets once into `.repopulse/models`. The downloads require internet access on first setup and may take several minutes. Later inference, unit tests, and the recorded-fixture retrieval evaluation use cached weights without network access. Run `make models` to retry or refresh the model cache.
+Requirements: Python 3.11+ and GNU Make. On Windows, use a Python installation with `venv` and `pip`; the Makefile uses the `py -3` launcher by default. No API key, credit card, or paid service is needed for the default local path. `make setup` installs Python packages and downloads the two free model weight sets once into `.repopulse/models`. The downloads require internet access on first setup and may take several minutes. Later inference, unit tests, and the recorded-fixture evaluation use cached weights without network access. Run `make models` to retry or refresh the model cache.
 
 ```sh
 make setup
@@ -76,20 +76,22 @@ Ingest a live public repository, then search its local evidence:
 
 Ingestion now fetches discussion and review comments through GitHub's repository-wide `since` endpoints and groups them by issue or PR, avoiding a comment request per item. It uses the PR title and body already present in GitHub's issue listing, avoiding a PR detail request per item. Paginated listings still require calls. If a run reaches GitHub's rate limit, RepoPulse prints the reset delay and exits without writing an incomplete corpus; rerun it after the reset or configure a free `GITHUB_TOKEN` in `.env`. The Groq key does not affect GitHub's request quota.
 
-The retrieval benchmark uses [recorded `pallets/click` REST fields](evals/fixtures/click_snapshot.json) and [21 labeled questions](evals/datasets/retrieval.jsonl). `make eval` regenerates [the measured report](evals/reports/retrieval_report.md) and per-query JSON. It never contacts GitHub or a hosted LLM. See [evaluation methodology](docs/EVALUATION.md) before using these numbers as evidence.
+The Phase 6 evaluation uses [a pinned 400-item `pallets/click` capture](evals/fixtures/click_large_snapshot.json), [55 labeled retrieval questions](evals/datasets/retrieval_large.jsonl), and [60 agent cases](evals/datasets/agent_cases.jsonl), including 20 planted comment attacks. `make eval` regenerates [the measured Markdown report](evals/reports/latest.md) and [case-level JSON](evals/reports/latest.json). It never contacts GitHub or a hosted LLM. The two public model weight sets must already be cached by `make setup` or `make models`; offline unit tests use mock components and do not load them. Set `min_full_agent_pass_rate` in [evaluation config](evals/config.json) for the CI exit threshold. On Windows without GNU Make, run `.\.venv\Scripts\python.exe -m evals.run_suite`.
 
-## Measured Phase 2 retrieval results
+`make eval-live` is an optional ten-question Groq free-tier check with pauses between calls. Set `LLM_PROVIDER=groq` and `GROQ_API_KEY` in ignored `.env`, cache the models, and ingest `pallets/click` before running it. This makes live requests and writes `evals/reports/live_latest.md` and `live_latest.json`; it is separate from CI. On Windows without GNU Make, run `.\.venv\Scripts\python.exe -m evals.run_live`. See [evaluation methodology](docs/EVALUATION.md) for metric definitions and limitations.
 
-The committed report measured 21 labeled queries over 20 recorded source documents. Hit rate and MRR use the first three distinct source documents. These are results from the small curated fixture, not an estimate of performance across GitHub.
+## Measured Phase 6 retrieval results
+
+The offline suite measured 55 labeled queries over 400 recorded issue/PR documents. Hit rate and MRR use the first three distinct source documents.
 
 | Chunking | Reranker | Chunks | Hit rate@3 | MRR@3 |
 | --- | --- | ---: | ---: | ---: |
-| Fixed | Off | 85 | 1.000 | 1.000 |
-| Fixed | On | 85 | 1.000 | 1.000 |
-| Structure-aware | Off | 96 | 1.000 | 0.976 |
-| Structure-aware | On | 96 | 1.000 | 1.000 |
+| Fixed | Off | 1193 | 0.800 | 0.667 |
+| Fixed | On | 1193 | 0.873 | 0.806 |
+| Structure-aware | Off | 1279 | 0.818 | 0.709 |
+| Structure-aware | On | 1279 | 0.873 | 0.779 |
 
-The exact fixture hash, pinned model revisions, and per-query results are in the generated report and JSON. Run `make eval` after setup to reproduce the table.
+The fixture hashes, per-query rankings, agent outcomes, baseline comparison, and ablations are in the generated JSON. These are local recorded-fixture results, not estimates of real-model answer quality. The historical Phase 2 report remains in `evals/reports/retrieval_report.md`.
 
 ## Phase roadmap
 
@@ -98,11 +100,11 @@ The exact fixture hash, pinned model revisions, and per-query results are in the
 3. **MCP server and LangGraph agent loop** — complete.
 4. **Short-term and SQLite memory with explicit storage policy** — complete.
 5. Input, injection, output, citation, and action guardrails (complete).
-6. Full deterministic answer evaluation suite and baseline comparisons.
+6. **Deterministic answer evaluation suite and baseline comparisons** — complete.
 7. JSONL tracing and viewer.
 8. CI, polished demo, and interview documentation.
 
-`make eval` currently runs the Phase 2 retrieval benchmark; Phase 6 will expand it to answer quality, guardrail, ablation, and harder retrieval evaluation. `make demo` becomes functional in Phase 8. See [design decisions](docs/DESIGN.md) for the architecture and trade-offs.
+`make demo` becomes functional in Phase 8. See [design decisions](docs/DESIGN.md) for the architecture and trade-offs.
 
 ## Current architecture
 

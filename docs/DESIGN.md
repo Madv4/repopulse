@@ -2,7 +2,7 @@
 
 ## Scope and phases
 
-RepoPulse follows the requested eight-phase delivery order. This document records implementation choices as they are made. Phase 1 intentionally stops at package infrastructure, provider adapters, and GitHub data transport. Later architecture is a plan, not a claim of implemented behavior.
+RepoPulse follows the requested eight-phase delivery order. This document records implementation choices as they are made. Phase 1 stopped at package infrastructure, provider adapters, and GitHub data transport; later sections describe implemented phases through Phase 6.
 
 ## Phase 1
 
@@ -50,7 +50,7 @@ All sources become a `SourceDocument` with canonical ID, URL, title, body, autho
 
 The embedder is explicitly local `sentence-transformers/all-MiniLM-L6-v2`, with vectors supplied to ChromaDB. Chroma's default embedding function is never invoked. The optional cross-encoder is `cross-encoder/ms-marco-MiniLM-L6-v2`; it scores query/passage pairs after vector retrieval. Retrieval deduplicates by source document so long issues do not occupy every returned rank. The current candidate pool has a fixed bound; for very long corpora it can return fewer than `k` distinct sources, a known limitation.
 
-`make setup` downloads both public model weight sets once into `.repopulse/models`. The configured Hugging Face revisions are pinned to the actual downloaded snapshots, and the evaluation report records both hashes. Runtime inference and `make eval` request cached files only and fail with a clear `make models` instruction when weights are absent. Unit tests inject a deterministic tiny embedder and reranker, so they never download a model or contact GitHub. The recorded retrieval fixture has selected real `pallets/click` REST fields; no fixture text is sent to a hosted service.
+`make setup` downloads both public model weight sets once into `.repopulse/models`. The configured Hugging Face revisions are pinned to the actual downloaded snapshots; the historical Phase 2 report records both revision hashes, and the Phase 6 report records fixture hashes. Runtime inference and `make eval` request cached files only and fail with a clear `make models` instruction when weights are absent. Unit tests inject a deterministic tiny embedder and reranker, so they never download a model or contact GitHub. The recorded retrieval fixture has selected real `pallets/click` REST fields; no fixture text is sent to a hosted service.
 
 The NumPy dependency is capped below 2.5 because the 2.5.4 stubs use syntax mypy rejected under the project's Python 3.11 type-check target. Mypy checks all project source and evaluation code strictly while skipping deep traversal into the large Torch, Transformers, NumPy and Chroma dependency trees.
 
@@ -77,7 +77,7 @@ The agent reserves an estimated prompt budget from message length, sends the rem
 
 The synthesizer validates an `Answer` Pydantic object containing a summary claim, key-change claims, risk claims, and limitations. Each retained claim must have at least one citation URL retrieved from an issue, pull request, or commit. Milestone and release records can guide search but cannot serve as final citations. The initial Phase 3 version used a retrieved title when synthesis failed and checked URL membership only; the follow-up below replaces that behavior with an explicit degraded answer; the later follow-up below adopts quote grounding.
 
-All Phase 3 tests are offline and use the pinned recorded `pallets/click` fields plus the scripted mock LLM. The fixture intentionally lacks PR-file, milestone, and release lists, so tests verify empty outputs for those tools instead of inventing records. `make eval` remains the Phase 2 retrieval evaluation. Its near-perfect small-fixture scores are not treated as comparative evidence; the planned harder Phase 6 set is described in `docs/EVALUATION.md`.
+All Phase 3 tests are offline and use the pinned recorded `pallets/click` fields plus the scripted mock LLM. The fixture intentionally lacks PR-file, milestone, and release lists, so tests verify empty outputs for those tools instead of inventing records. The later Phase 6 suite replaced the small retrieval benchmark as the `make eval` target; its methodology and measured results are in `docs/EVALUATION.md`.
 
 ### Sources checked
 
@@ -121,3 +121,9 @@ Short-term memory is a six-turn in-process window. It keeps user questions and c
 The agent checks question bounds and scope before the graph, and direct write requests become inert dry-run `action_plan` objects. The MCP surface remains read-only. At the tool-result boundary, a heuristic detector quarantines suspicious passages and traces their IDs and reasons. Accepted passages enter decision and synthesis prompts only inside escaped `untrusted_data` blocks with an explicit data-only instruction. Output redaction runs after citation verification, so a source quote can be checked exactly and then obscured if it contains contact information or credentials. The seven `GUARD_*` settings in `docs/THREAT_MODEL.md` permit individual Phase 6 ablations. Structural type checks remain in place even when the extra structured-output retry is disabled.
 
 The live quote-grounding repair is documented in `docs/LIVE_QUOTE_REPAIR.md`. Quote matching now normalizes Unicode and whitespace, without relaxing evidence IDs or the 30-word bound. Rejected claims produce local diagnostic trace events and one feedback-guided synthesis retry. A JSON-mode HTTP 400 receives one text-mode JSON retry.
+
+## Phase 6
+
+The evaluation suite uses a pinned 400-item public Click issue/PR snapshot, 55 reviewed source-URL retrieval labels, and 60 agent cases. It reads the committed fixtures unchanged on every run. Retrieval is measured for fixed and structure chunking with and without the local reranker. The offline agent run uses the actual LangGraph state machine, scripted mock LLM, and fixture-backed MCP-style gateway; deterministic 403, 429, 500, and timeout cases exercise its retry path. A synthetic repository carries 20 planted malicious comments. The naive baseline makes one retrieval and one call to the same mock without planning or guardrails. Ablations rerun scoped subsets with guardrails, reranking, or memory switched off/on.
+
+`make eval` writes a Markdown summary and JSON with per-case results and fixture hashes, then enforces the pass-rate threshold in `evals/config.json`. Reported latency is local elapsed time, and token budget units are character-based estimates unless provider usage is larger. The mock reports no actual tokenizer usage; its hosted-service cost is zero. Optional `make eval-live` runs ten labeled cases through Groq with configured pauses, using the free tier and existing local ingestion. The live results are excluded from CI. See `docs/EVALUATION.md` for score definitions, actual results, and validity limits.
