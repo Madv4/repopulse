@@ -24,7 +24,8 @@ from repopulse.llm.base import ChatMessage, ProviderError
 from repopulse.llm.factory import create_provider
 from repopulse.mcp_gateway import MCPGateway
 from repopulse.memory import MemoryStore, SessionMemory
-from repopulse.observability.tracer import TraceWriter
+from repopulse.observability.tracer import TraceWriter, load_trace
+from repopulse.observability.viewer import render_trace_html
 from repopulse.retrieval.rerank import LocalCrossEncoderReranker
 from repopulse.retrieval.retriever import Retriever
 
@@ -162,6 +163,11 @@ def main() -> None:
     memory_add.add_argument("--expires", help="Last active UTC day, YYYY-MM-DD")
     memory_forget = memory_actions.add_parser("forget", help="Delete a memory by ID")
     memory_forget.add_argument("id")
+    trace_command = commands.add_parser("trace", help="Inspect a local agent run")
+    trace_actions = trace_command.add_subparsers(dest="trace_action", required=True)
+    trace_show = trace_actions.add_parser("show", help="Show a redacted JSONL run trace")
+    trace_show.add_argument("run_id", help="Run ID from an answer's trace_id field")
+    trace_show.add_argument("--html", type=Path, help="Write a self-contained HTML viewer")
     args = parser.parse_args()
     settings = Settings()
     if args.command == "doctor":
@@ -271,11 +277,39 @@ def main() -> None:
                 )
             except ValueError:
                 parser.exit(2, "Memory rejected: check text, repo, confidence, and expiry.\n")
+            trace = TraceWriter(Path("traces"))
+            trace.record(
+                "memory_write",
+                scope="long_term",
+                status="stored",
+                record_id=record.id,
+                kind=record.kind,
+                source=record.source,
+                repo=record.repo,
+                confidence=record.confidence,
+                expires_at=record.expires_at,
+            )
             print(record.model_dump_json(indent=2, ensure_ascii=True))
+            print(f"Trace: {trace.run_id}", file=sys.stderr)
         elif args.memory_action == "forget":
             if not memory_store.forget(args.id):
                 parser.exit(2, "Memory ID not found.\n")
+            trace = TraceWriter(Path("traces"))
+            trace.record(
+                "memory_write", scope="long_term", status="forgotten", record_id=args.id
+            )
             print(f"Forgot memory {args.id}")
+            print(f"Trace: {trace.run_id}", file=sys.stderr)
+    elif args.command == "trace":
+        try:
+            events = load_trace(Path("traces"), args.run_id)
+        except (ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+            parser.exit(2, f"Cannot show trace: {exc}\n")
+        if args.html is not None:
+            output = render_trace_html(events, args.run_id, args.html)
+            print(f"Wrote trace viewer to {output}")
+        else:
+            print(json.dumps(events, indent=2, ensure_ascii=True))
 
 
 if __name__ == "__main__":

@@ -354,9 +354,9 @@ def test_synthesis_retries_once_with_failed_quote_feedback(tmp_path: Path) -> No
     assert not answer.degraded
     assert "quote_not_in_evidence" in provider.calls[-1][-1].content
     events = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
-    assert events[0]["event"] == "claim_rejection"
-    assert events[0]["quote"] == "fabricated quote"
-    assert EVIDENCE.title in events[0]["evidence_text"]
+    rejection = next(event for event in events if event["event"] == "claim_rejection")
+    assert rejection["quote"] == "fabricated quote"
+    assert EVIDENCE.title in rejection["evidence_text"]
 
 
 def test_planning_json_mode_http_400_retries_without_degrading() -> None:
@@ -417,5 +417,6 @@ def test_planner_retries_validation_with_error_and_traces_raw(tmp_path: Path) ->
     assert not any("Planning" in reason for reason in answer.degradation_reasons)
     assert "Fix your JSON" in provider.calls[1][-1].content
     events = [json.loads(line) for line in trace.path.read_text(encoding="utf-8").splitlines()]
-    assert events[0]["stage"] == "planning"
-    assert events[0]["raw_output"].startswith("```json")
+    failure = next(event for event in events if event["event"] == "validation_failure")
+    assert failure["stage"] == "planning"
+    assert failure["raw_output"].startswith("```json")

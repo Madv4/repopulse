@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable
+from time import perf_counter
 from typing import Any, Literal, Protocol, TypedDict, TypeVar
 
 from langgraph.graph import END, START, StateGraph
@@ -208,7 +209,7 @@ class RepoPulseAgent:
     def _finish_answer(self, state: AgentState, answer: Answer) -> AgentState:
         answer.degradation_reasons = state["degradation_reasons"].copy()
         answer.degraded = bool(answer.degradation_reasons)
-        answer.trace_id = self.trace.run_id if answer.degraded and self.trace else None
+        answer.trace_id = self.trace.run_id if self.trace else None
         answer.budget_units_used = state["tokens_used"]
         answer.provider_prompt_tokens = state["provider_prompt_tokens"]
         answer.provider_completion_tokens = state["provider_completion_tokens"]
@@ -221,6 +222,19 @@ class RepoPulseAgent:
             answer.limitations = [redact(item) for item in answer.limitations]
             answer.degradation_reasons = [redact(item) for item in answer.degradation_reasons]
         state["answer"] = answer
+        if self.trace is not None:
+            self.trace.record(
+                "guardrail",
+                guard="output_redaction",
+                decision="applied" if self.guardrails.output_redaction else "disabled",
+            )
+            self.trace.record(
+                "token_usage",
+                budget_units_used=answer.budget_units_used,
+                provider_prompt_tokens=answer.provider_prompt_tokens,
+                provider_completion_tokens=answer.provider_completion_tokens,
+            )
+            self.trace.record("final_answer", answer=answer.model_dump(mode="json"))
         return state
 
     def _evidence_payload(self, evidence: list[Evidence]) -> list[str] | list[dict[str, Any]]:
@@ -236,9 +250,23 @@ class RepoPulseAgent:
             )
         return ""
 
+    def _trace_evidence(self, item: Evidence, tool: str, disposition: str) -> None:
+        if self.trace is not None:
+            self.trace.record(
+                "evidence",
+                tool=tool,
+                disposition=disposition,
+                evidence_id=item.evidence_id,
+                url=item.url,
+                kind=item.kind,
+                title=item.title,
+                excerpt=item.excerpt,
+            )
+
     def _complete(
         self,
         state: AgentState,
+        stage: str,
         instruction: str,
         payload: dict[str, Any],
         *,
@@ -271,9 +299,22 @@ class RepoPulseAgent:
         remaining = self.token_budget - state["tokens_used"] - estimate
         if remaining < 1:
             raise BudgetExhausted
-        response = self.provider.complete(
-            messages, max_output_tokens=min(remaining, output_limit), json_mode=json_mode
-        )
+        started = perf_counter()
+        try:
+            response = self.provider.complete(
+                messages, max_output_tokens=min(remaining, output_limit), json_mode=json_mode
+            )
+        except Exception as exc:
+            if self.trace is not None:
+                self.trace.record(
+                    "llm_call",
+                    stage=stage,
+                    provider=self.provider.name,
+                    status="error",
+                    error_type=type(exc).__name__,
+                    latency_ms=round((perf_counter() - started) * 1000, 3),
+                )
+            raise
         used = max(
             estimate + max(1, len(response.text) // 4),
             response.prompt_tokens + response.completion_tokens,
@@ -281,6 +322,20 @@ class RepoPulseAgent:
         state["tokens_used"] += used
         state["provider_prompt_tokens"] += response.prompt_tokens
         state["provider_completion_tokens"] += response.completion_tokens
+        if self.trace is not None:
+            self.trace.record(
+                "llm_call",
+                stage=stage,
+                provider=self.provider.name,
+                model=response.model,
+                status="ok",
+                latency_ms=round((perf_counter() - started) * 1000, 3),
+                prompt_characters=sum(len(message.content) for message in messages),
+                completion_characters=len(response.text),
+                budget_units_used=used,
+                provider_prompt_tokens=response.prompt_tokens,
+                provider_completion_tokens=response.completion_tokens,
+            )
         return response.text
 
     def _structured(
@@ -301,6 +356,7 @@ class RepoPulseAgent:
             try:
                 raw = self._complete(
                     state,
+                    stage,
                     instruction,
                     payload,
                     output_limit=output_limit,
@@ -343,6 +399,23 @@ class RepoPulseAgent:
     def _plan(self, state: AgentState) -> AgentState:
         if state["plan"]:
             state["replans"] += 1
+        session_turns = [turn.model_dump() for turn in self.session_memory.recent()]
+        memories = (
+            self.long_term_memory.relevant(state["question"], state["repo"])
+            if self.long_term_memory is not None
+            else []
+        )
+        memory_context = [
+            record.model_dump(include={"text", "kind", "source", "repo", "confidence"})
+            for record in memories
+        ]
+        if self.trace is not None:
+            self.trace.record("memory_read", scope="session", records=session_turns)
+            self.trace.record(
+                "memory_read",
+                scope="long_term",
+                records=[record.model_dump(mode="json") for record in memories],
+            )
         try:
             plan = self._structured(
                 state,
@@ -354,15 +427,8 @@ class RepoPulseAgent:
                     "repo": state["repo"],
                     "previous": state["plan"],
                     "found_urls": [e.url for e in state["evidence"]],
-                    "session": [turn.model_dump() for turn in self.session_memory.recent()],
-                    "memories": [
-                        record.model_dump(include={"text", "kind", "source", "repo", "confidence"})
-                        for record in (
-                            self.long_term_memory.relevant(state["question"], state["repo"])
-                            if self.long_term_memory is not None
-                            else []
-                        )
-                    ],
+                    "session": session_turns,
+                    "memories": memory_context,
                 },
                 Plan,
             )
@@ -378,6 +444,13 @@ class RepoPulseAgent:
         except ValidationError:
             state["plan"] = [state["question"]]
             self._degrade(state, "Planning LLM returned invalid structured output.")
+        if self.trace is not None:
+            self.trace.record(
+                "plan",
+                subquestions=state["plan"],
+                replan_index=state["replans"],
+                decision=state["decision"],
+            )
         return state
 
     def _select(self, state: AgentState) -> AgentState:
@@ -420,6 +493,13 @@ class RepoPulseAgent:
         if state["tokens_used"] >= self.token_budget:
             state["decision"] = "stop"
             state["selected"] = None
+        if self.trace is not None:
+            self.trace.record(
+                "tool_selection",
+                tool=choice.tool,
+                args=choice.args,
+                selected=state["selected"] is not None,
+            )
         return state
 
     @staticmethod
@@ -434,8 +514,11 @@ class RepoPulseAgent:
         for retry in range(3):
             if state["steps"] >= self.max_steps:
                 state["limitations"].append("Tool attempt limit reached before retry completed.")
+                if self.trace is not None:
+                    self.trace.record("guardrail", guard="max_steps", decision="stop")
                 break
             state["steps"] += 1
+            started = perf_counter()
             try:
                 if self.progress is not None:
                     self.progress(
@@ -443,28 +526,60 @@ class RepoPulseAgent:
                         f"attempt {retry + 1}/3)"
                     )
                 result = await self.gateway.call(choice.tool, choice.args)
+                if self.trace is not None:
+                    self.trace.record(
+                        "tool_call",
+                        tool=choice.tool,
+                        args=choice.args,
+                        step=state["steps"],
+                        attempt=retry + 1,
+                        status="ok",
+                        latency_ms=round((perf_counter() - started) * 1000, 3),
+                        result_summary={
+                            "count": len(result.evidence),
+                            "evidence_ids": [item.evidence_id for item in result.evidence],
+                            "urls": [item.url for item in result.evidence],
+                        },
+                    )
                 known = {(item.kind, item.url, item.excerpt) for item in state["evidence"]}
                 for item in result.evidence:
                     if (item.kind, item.url, item.excerpt) in known:
+                        self._trace_evidence(item, choice.tool, "duplicate")
                         continue
                     if self.guardrails.injection_detection:
                         finding = detect_injection(item)
                         if finding.suspicious:
                             if self.trace is not None:
                                 self.trace.quarantine(item.evidence_id, finding.reasons)
+                            self._trace_evidence(item, choice.tool, "quarantined")
                             state["limitations"].append(
                                 f"Suspicious retrieved passage {item.evidence_id} was quarantined."
                             )
                             continue
                     state["evidence"].append(item)
+                    self._trace_evidence(item, choice.tool, "accepted")
                 break
             except Exception as exc:
+                if self.trace is not None:
+                    self.trace.record(
+                        "tool_call",
+                        tool=choice.tool,
+                        args=choice.args,
+                        step=state["steps"],
+                        attempt=retry + 1,
+                        status="error",
+                        latency_ms=round((perf_counter() - started) * 1000, 3),
+                        result_summary={"error_type": type(exc).__name__},
+                    )
                 if retry == 2 or state["steps"] >= self.max_steps:
                     state["limitations"].append(
                         f"{choice.tool} failed after {retry + 1} attempt(s): {type(exc).__name__}."
                     )
                 else:
-                    await self.sleep(float(2**retry))
+                    delay = float(2**retry)
+                    if self.trace is not None:
+                        self.trace.record("tool_retry", tool=choice.tool, delay_seconds=delay)
+                    await self.sleep(delay)
         return state
 
     @staticmethod
@@ -475,6 +590,11 @@ class RepoPulseAgent:
     def _decide(self, state: AgentState) -> AgentState:
         if state["steps"] >= self.max_steps or state["tokens_used"] >= self.token_budget:
             state["decision"] = "stop"
+            if self.trace is not None:
+                self.trace.record(
+                    "decision", action="stop", evidence_count=len(state["evidence"]),
+                    steps=state["steps"], replans=state["replans"],
+                )
             return state
         citable = [e for e in state["evidence"] if e.kind in CITABLE_KINDS]
         try:
@@ -513,6 +633,11 @@ class RepoPulseAgent:
         if state["tokens_used"] >= self.token_budget:
             decision = "stop"
         state["decision"] = decision
+        if self.trace is not None:
+            self.trace.record(
+                "decision", action=decision, evidence_count=len(state["evidence"]),
+                steps=state["steps"], replans=state["replans"],
+            )
         return state
 
     @staticmethod
@@ -643,21 +768,38 @@ class RepoPulseAgent:
             answer.limitations.append("An uncited summary was removed.")
         return self._finish_answer(state, answer)
 
-    async def ask(self, question: str, repo: str) -> Answer:
-        """Run one bounded graph and return a validated, citation-bearing answer."""
+    async def _ask_inner(self, question: str, repo: str) -> Answer:
         if self.guardrails.input_validation:
-            validate_input(question, repo)
+            try:
+                validate_input(question, repo)
+            except ValueError as exc:
+                if self.trace is not None:
+                    self.trace.record(
+                        "guardrail", guard="input_validation", decision="rejected",
+                        reason=str(exc),
+                    )
+                raise
+            if self.trace is not None:
+                self.trace.record("guardrail", guard="input_validation", decision="accepted")
         GitHubClient.repo_path(repo)
         if not question.strip():
             raise ValueError("question must not be empty")
         action = write_action(question, repo) if self.guardrails.action_gate else None
         if action is not None:
-            return Answer(
+            answer = Answer(
                 action_plan=action,
                 limitations=[
                     "Write action requires explicit confirmation; this is a dry-run plan."
                 ],
+                trace_id=self.trace.run_id if self.trace is not None else None,
             )
+            if self.trace is not None:
+                self.trace.record(
+                    "guardrail", guard="action_gate", decision="dry_run",
+                    requested_action=action.requested_action,
+                )
+                self.trace.record("final_answer", answer=answer.model_dump(mode="json"))
+            return answer
         initial: AgentState = {
             "question": question,
             "repo": repo,
@@ -681,4 +823,38 @@ class RepoPulseAgent:
             raise RuntimeError("agent ended without an answer")
         answer = Answer.model_validate(result)
         self.session_memory.remember(question, answer)
+        if self.trace is not None:
+            self.trace.record(
+                "memory_write",
+                scope="session",
+                status="stored",
+                turn=self.session_memory.recent()[-1].model_dump(),
+            )
+            self.trace.record(
+                "memory_write",
+                scope="long_term",
+                status="none",
+                reason="Agent ask never auto-writes retrieved GitHub content to SQLite.",
+            )
+        return answer
+
+    async def ask(self, question: str, repo: str) -> Answer:
+        """Run one bounded graph and return a validated, citation-bearing answer."""
+        if self.trace is not None:
+            self.trace.record(
+                "run_start",
+                question=question,
+                repo=repo,
+                provider=self.provider.name,
+                max_steps=self.max_steps,
+                token_budget=self.token_budget,
+            )
+        try:
+            answer = await self._ask_inner(question, repo)
+        except Exception as exc:
+            if self.trace is not None:
+                self.trace.record("run_error", error_type=type(exc).__name__, reason=str(exc))
+            raise
+        if self.trace is not None:
+            self.trace.record("run_end", status="completed", degraded=answer.degraded)
         return answer
