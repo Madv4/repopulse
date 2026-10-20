@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from evals.metrics import RetrievalCase, aggregate, measure_case
 from repopulse.agent import RepoPulseAgent
 from repopulse.agent.citations import quote_in_evidence
+from repopulse.agent.graph import Claim
 from repopulse.config import Settings
 from repopulse.guardrails import Guardrails
 from repopulse.ingestion.chunking import FixedChunker, StructureChunker
@@ -347,6 +348,8 @@ def evaluate_agent(
                 "injection_blocked": any(event["event"] == "quarantine" for event in events),
                 "latency_seconds": elapsed,
                 "budget_units_used": answer.budget_units_used,
+                "provider_prompt_tokens": answer.provider_prompt_tokens,
+                "provider_completion_tokens": answer.provider_completion_tokens,
                 "tool_calls": gateway.calls,
                 "degraded": answer.degraded,
             }
@@ -368,6 +371,8 @@ def evaluate_agent(
         "refusal_rate": sum(row["refused"] for row in results) / total,
         "mean_latency_seconds": sum(row["latency_seconds"] for row in results) / total,
         "budget_units_used": sum(row["budget_units_used"] for row in results),
+        "provider_prompt_tokens": sum(row["provider_prompt_tokens"] for row in results),
+        "provider_completion_tokens": sum(row["provider_completion_tokens"] for row in results),
         "estimated_cost_usd": 0.0,
         "cases": results,
     }
@@ -390,38 +395,61 @@ def evaluate_baseline(
         if case["kind"] == "tool_failure":
             evidence = []
         first = evidence[0] if evidence else None
-        summary = None
+        summary: Claim | None = None
+        budget_units = 0
+        prompt_tokens = 0
+        completion_tokens = 0
         if first is not None:
-            summary = type(
-                "NaiveClaim",
-                (),
-                {
-                    "text": first.title,
-                    "citations": [first.url],
-                    "evidence": [
-                        type(
-                            "Ref",
-                            (),
-                            {
-                                "evidence_id": first.evidence_id,
-                                "quote": " ".join(first.title.split()[:30]),
-                            },
-                        )()
-                    ],
-                },
-            )()
+            messages = (
+                ChatMessage(role="system", content="Answer once using the retrieved passage."),
+                ChatMessage(
+                    role="user",
+                    content=json.dumps(
+                        {
+                            "question": case["question"],
+                            "evidence": [
+                                {
+                                    "evidence_id": first.evidence_id,
+                                    "title": first.title,
+                                    "excerpt": first.excerpt,
+                                }
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                ),
+            )
+            def baseline_responder(prompt: tuple[ChatMessage, ...]) -> str:
+                return _mock_response(prompt, FixtureGateway([]))
+
+            response = MockProvider(responder=baseline_responder).complete(messages)
+            proposed = json.loads(response.text).get("summary")
+            if proposed is not None:
+                summary = Claim.model_validate({**proposed, "citations": [first.url]})
+            estimate = max(1, sum(len(message.content) for message in messages) // 4)
+            budget_units = max(
+                estimate + max(1, len(response.text) // 4),
+                response.prompt_tokens + response.completion_tokens,
+            )
+            prompt_tokens = response.prompt_tokens
+            completion_tokens = response.completion_tokens
         results.append(
             {
                 "id": case["id"],
                 "kind": case["kind"],
                 "pass": _passed(case, summary),
                 "refused": summary is None,
-                "citation_correct": None
-                if summary is None
-                else _claim_correct(type("NaiveAnswer", (), {"summary": summary})(), evidence),
+                "citation_correct": None if summary is None or first is None else all(
+                    ref.evidence_id == first.evidence_id
+                    and quote_in_evidence(ref.quote, first)
+                    and first.url in summary.citations
+                    for ref in summary.evidence
+                ),
                 "injection_blocked": False,
                 "latency_seconds": time.perf_counter() - started,
-                "budget_units_used": 0,
+                "budget_units_used": budget_units,
+                "provider_prompt_tokens": prompt_tokens,
+                "provider_completion_tokens": completion_tokens,
             }
         )
     total = len(results)
@@ -440,7 +468,9 @@ def evaluate_baseline(
         else None,
         "refusal_rate": sum(row["refused"] for row in results) / total,
         "mean_latency_seconds": sum(row["latency_seconds"] for row in results) / total,
-        "budget_units_used": 0,
+        "budget_units_used": sum(row["budget_units_used"] for row in results),
+        "provider_prompt_tokens": sum(row["provider_prompt_tokens"] for row in results),
+        "provider_completion_tokens": sum(row["provider_completion_tokens"] for row in results),
         "estimated_cost_usd": 0.0,
         "cases": results,
     }
@@ -494,7 +524,7 @@ def run() -> dict[str, Any]:
             "memory_off": memory_off,
         },
         "llm": "deterministic mock (offline)",
-        "live_model_cost": "TBD (run make eval-live)",
+        "live_model_cost": "TBD (run make eval)",
         "ci_pass": full["pass_rate"] >= config.min_full_agent_pass_rate,
     }
     LATEST_JSON.parent.mkdir(parents=True, exist_ok=True)
@@ -531,8 +561,9 @@ def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
         "## Naive RAG versus full agent",
         "",
         "| System | Cases | Pass rate | Answer accuracy (normal) | Citation correctness | "
-        "Injection block | Refusal | Mean latency (s) | Budget units | Est. cost (USD) |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "Injection block | Refusal | Mean latency (s) | Budget units | "
+        "Provider tokens (in/out) | Est. cost (USD) |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for label, key in (("Naive RAG", "naive_rag"), ("Full agent", "full_agent")):
         item = payload[key]
@@ -541,6 +572,7 @@ def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
             f"{item['answer_accuracy']:.3f} | {item['citation_correctness_rate']:.3f} | "
             f"{item['injection_block_rate']:.3f} | {item['refusal_rate']:.3f} | "
             f"{item['mean_latency_seconds']:.4f} | {item['budget_units_used']} | "
+            f"{item['provider_prompt_tokens']}/{item['provider_completion_tokens']} | "
             f"{item['estimated_cost_usd']:.2f} |"
         )
     lines += [
@@ -570,7 +602,8 @@ def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
         "Budget units are the agent's character-based reservation or provider usage, "
         "whichever is larger. Mock responses report no provider tokens.",
         "Mock execution uses no paid service, so its estimated service cost is USD 0. "
-        "Real-model cost: TBD (run make eval-live).",
+        "Provider-reported tokens are zero because the mock does not report token usage. "
+        "Real-model cost: TBD (run make eval).",
         "Per-case outcomes, rankings, hashes, and raw measured values are in `latest.json`.",
     ]
     LATEST_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
