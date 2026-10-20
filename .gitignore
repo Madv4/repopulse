@@ -12,5 +12,7 @@ build/
 traces/
 evals/reports/*.json
 !evals/reports/retrieval_results.json
+!evals/reports/attacks_live.json
+!evals/reports/injection_classifier.json
 evals/reports/latest.md
 evals/reports/live_latest.md
