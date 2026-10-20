@@ -36,6 +36,17 @@ def publish(
         raise ValueError("Classifier report must use live Groq")
     attack_rows = attacks["summaries"]
     classifier_rows = classifier["summary"]
+    categories = {
+        (row["dataset"], row["id"]): row.get("attack_category", "unclassified")
+        for row in classifier["cases"]
+    }
+
+    def missed_text(row: dict[str, Any]) -> str:
+        return ", ".join(
+            f"`{case_id}` ({categories[(row['dataset'], case_id)]})"
+            for case_id in row["missed_case_ids"]
+        ) or "none"
+
     if len(attack_rows) != 4 or len(classifier_rows) != 3:
         raise ValueError("Attack reports do not include every frozen set")
     if any(row["completed"] != row["case_count"] for row in [*attack_rows, *classifier_rows]):
@@ -75,8 +86,7 @@ def publish(
         )
     lines += ["", "Attack comments still reaching the mock LLM agent after both screens:"]
     for row in classifier_rows:
-        missed = ", ".join(f"`{case_id}`" for case_id in row["missed_case_ids"]) or "none"
-        lines.append(f"- {row['dataset']}: {missed}")
+        lines.append(f"- {row['dataset']}: {missed_text(row)}")
     lines += [
         "", "The v2 set was evaluated once after the classifier was committed. "
         "Screening rates are distinct from live attack success rates.",
@@ -98,8 +108,7 @@ def publish(
         )
     limits.append("The optional classifier plus heuristic left these attack comments unscreened:")
     for row in classifier_rows:
-        missed = ", ".join(f"`{case_id}`" for case_id in row["missed_case_ids"]) or "none"
-        limits.append(f"- {row['dataset']}: {missed} (live Groq classifier).")
+        limits.append(f"- {row['dataset']}: {missed_text(row)} (live Groq classifier).")
     limits.append(
         "These are observed results on frozen synthetic fixtures, not proof of "
         "general safety. The live behavior scorer can miss paraphrased compliance."
