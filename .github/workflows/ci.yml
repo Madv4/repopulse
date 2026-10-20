@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LLM_PROVIDER: mock
+      GUARD_INJECTION_CLASSIFIER: "false"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .repopulse/models
+            ~/.cache/huggingface
+          key: hf-models-${{ runner.os }}-${{ hashFiles('src/repopulse/config.py') }}
+      - name: Install project and test tools
+        run: python -m pip install -e ".[dev]"
+      - name: Cache pinned public model weights
+        run: python -m repopulse.cli models prepare
+      - name: Ruff
+        run: python -m ruff check .
+      - name: Mypy
+        run: python -m mypy src evals
+      - name: Offline tests
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: python -m pytest
+      - name: Offline evaluation and configured pass-rate gate
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: python -m evals.run_suite
+      - name: Generate badges from completed report
+        if: success()
+        run: python -m evals.generate_badges --ci-status passing
+      - name: Upload evaluation report and badges
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-evaluation
+          if-no-files-found: warn
+          path: |
+            evals/reports/latest.md
+            evals/reports/latest.json
+            docs/badges/ci.svg
+            docs/badges/eval.svg

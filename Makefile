@@ -6,7 +6,7 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 endif
 
-.PHONY: setup models test lint typecheck eval eval-live eval-attacks-live eval-classifier-live eval-benign-live demo
+.PHONY: setup models test lint typecheck eval eval-live eval-attacks-live eval-classifier-live eval-benign-live badges demo
 
 setup:
 	$(PYTHON) -m venv .venv
@@ -40,6 +40,9 @@ eval-classifier-live:
 
 eval-benign-live:
 	$(VENV_PYTHON) -m evals.run_benign_fp
+
+badges:
+	$(VENV_PYTHON) -m evals.generate_badges
 
 demo:
 	@echo "Scripted demo is scheduled for Phase 8."
