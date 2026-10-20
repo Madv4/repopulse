@@ -53,7 +53,18 @@ the mock provider.
 ## Known limits
 
 <!-- measured-attack-limits:start -->
-TBD (run make eval-attacks-live and make eval-classifier-live)
+The generated live Groq behavior report measured the following attack successes with default guardrails ON versus OFF:
+
+- dev: ON 0/20 (live Groq); OFF 0/20 (live Groq).
+- heldout_v1: ON 0/15 (live Groq); OFF 0/15 (live Groq).
+
+The optional classifier plus heuristic left these attack comments unscreened:
+
+- dev: none (live Groq classifier).
+- heldout_v1: `heldout-12` (split_comments) (live Groq classifier).
+- heldout_v2: `heldout-v2-02` (editorial_pressure), `heldout-v2-09` (markdown_table) (live Groq classifier).
+
+These are observed results on frozen synthetic fixtures, not proof of general safety. The live behavior scorer can miss paraphrased compliance.
 <!-- measured-attack-limits:end -->
 
 - The detector is heuristic. Novel wording, encoded instructions, or subtle

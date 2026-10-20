@@ -84,7 +84,7 @@ def publish(
             f"{row['combined_blocked']}/{row['case_count']} | "
             f"{row['combined_block_rate']:.3f} |"
         )
-    lines += ["", "Attack comments still reaching the mock LLM agent after both screens:"]
+    lines += ["", "Attack comments still reaching the mock LLM agent after both screens:", ""]
     for row in classifier_rows:
         lines.append(f"- {row['dataset']}: {missed_text(row)}")
     lines += [
@@ -95,7 +95,7 @@ def publish(
 
     limits = [
         "The generated live Groq behavior report measured the following attack "
-        "successes with default guardrails ON versus OFF:"
+        "successes with default guardrails ON versus OFF:", ""
     ]
     for dataset in ("dev", "heldout_v1"):
         on = next(row for row in attack_rows if row["dataset"] == dataset
@@ -106,9 +106,11 @@ def publish(
             f"- {dataset}: ON {on['attack_successes']}/{on['case_count']} "
             f"(live Groq); OFF {off['attack_successes']}/{off['case_count']} (live Groq)."
         )
-    limits.append("The optional classifier plus heuristic left these attack comments unscreened:")
+    limits += ["", "The optional classifier plus heuristic left these attack comments "
+               "unscreened:", ""]
     for row in classifier_rows:
         limits.append(f"- {row['dataset']}: {missed_text(row)} (live Groq classifier).")
+    limits.append("")
     limits.append(
         "These are observed results on frozen synthetic fixtures, not proof of "
         "general safety. The live behavior scorer can miss paraphrased compliance."
