@@ -45,4 +45,4 @@ badges:
 	$(VENV_PYTHON) -m evals.generate_badges
 
 demo:
-	@echo "Scripted demo is scheduled for Phase 8."
+	$(VENV_PYTHON) -m evals.run_demo
