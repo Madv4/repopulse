@@ -47,6 +47,7 @@ class EvalConfig(BaseModel):
     retrieval_k: int = Field(ge=1)
     live_case_count: int = Field(ge=1)
     live_sleep_seconds: float = Field(ge=0)
+    attack_live_sleep_seconds: float = Field(default=6, ge=0)
 
 
 def _sha(path: Path) -> str:

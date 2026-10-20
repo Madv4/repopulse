@@ -2,5 +2,6 @@
   "min_full_agent_pass_rate": 0.5,
   "retrieval_k": 3,
   "live_case_count": 10,
-  "live_sleep_seconds": 30
+  "live_sleep_seconds": 30,
+  "attack_live_sleep_seconds": 6
 }
