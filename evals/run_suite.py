@@ -494,10 +494,13 @@ def run() -> dict[str, Any]:
         synthetic,
         rankings,
         guardrails=Guardrails(
+            input_validation=False,
             injection_detection=False,
             untrusted_wrapping=False,
             citation_verification=False,
             output_redaction=False,
+            structured_validation=False,
+            action_gate=False,
         ),
     )
     normal_cases = [c for c in agent_cases if c["kind"] == "normal"]
