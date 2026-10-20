@@ -37,7 +37,8 @@ class Detection(BaseModel):
 _PATTERNS: dict[str, str] = {
     "instruction_override": (
         r"(?i)(ignore|disregard|override|forget)\s+(all\s+)?"
-        r"(previous|prior|system|developer|user)\s+(instructions?|prompts?|rules?)"
+        r"(previous|prior|system|developer|user)\s+(user\s+)?"
+        r"(instructions?|prompts?|rules?)"
     ),
     "fake_role": (
         r"(?im)(\[/?(system|developer|assistant)\]|<\|im_start\|>|"
@@ -45,7 +46,7 @@ _PATTERNS: dict[str, str] = {
     ),
     "exfiltration": (
         r"(?i)(send|post|upload|exfiltrate|leak)\b.{0,100}"
-        r"(token|secret|key|credential|\.env)\b"
+        r"(token|secret|key|credentials?|\.env)\b"
     ),
     "tool_hijack": (
         r"(?i)(call|invoke|run|execute)\s+(the\s+)?"

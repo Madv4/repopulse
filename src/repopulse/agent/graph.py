@@ -66,6 +66,9 @@ class Answer(BaseModel):
     degradation_reasons: list[str] = Field(default_factory=list)
     trace_id: str | None = None
     action_plan: ActionPlan | None = None
+    budget_units_used: int = Field(default=0, ge=0)
+    provider_prompt_tokens: int = Field(default=0, ge=0)
+    provider_completion_tokens: int = Field(default=0, ge=0)
 
 
 class ToolChoice(BaseModel):
@@ -114,6 +117,8 @@ class AgentState(TypedDict):
     steps: int
     replans: int
     tokens_used: int
+    provider_prompt_tokens: int
+    provider_completion_tokens: int
     decision: str
     answer: Answer | None
 
@@ -204,6 +209,9 @@ class RepoPulseAgent:
         answer.degradation_reasons = state["degradation_reasons"].copy()
         answer.degraded = bool(answer.degradation_reasons)
         answer.trace_id = self.trace.run_id if answer.degraded and self.trace else None
+        answer.budget_units_used = state["tokens_used"]
+        answer.provider_prompt_tokens = state["provider_prompt_tokens"]
+        answer.provider_completion_tokens = state["provider_completion_tokens"]
         if self.guardrails.output_redaction:
             for claim in [answer.summary, *answer.key_changes, *answer.risks]:
                 if claim is not None:
@@ -271,6 +279,8 @@ class RepoPulseAgent:
             response.prompt_tokens + response.completion_tokens,
         )
         state["tokens_used"] += used
+        state["provider_prompt_tokens"] += response.prompt_tokens
+        state["provider_completion_tokens"] += response.completion_tokens
         return response.text
 
     def _structured(
@@ -660,6 +670,8 @@ class RepoPulseAgent:
             "steps": 0,
             "replans": 0,
             "tokens_used": 0,
+            "provider_prompt_tokens": 0,
+            "provider_completion_tokens": 0,
             "decision": "continue",
             "answer": None,
         }

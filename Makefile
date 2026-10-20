@@ -6,7 +6,7 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 endif
 
-.PHONY: setup models test lint typecheck eval demo
+.PHONY: setup models test lint typecheck eval eval-live demo
 
 setup:
 	$(PYTHON) -m venv .venv
@@ -27,7 +27,10 @@ typecheck:
 	$(VENV_PYTHON) -m mypy src evals
 
 eval:
-	$(VENV_PYTHON) -m evals.run_retrieval
+	$(VENV_PYTHON) -m evals.run_suite
+
+eval-live:
+	$(VENV_PYTHON) -m evals.run_live
 
 demo:
 	@echo "Scripted demo is scheduled for Phase 8."
