@@ -853,7 +853,7 @@ class RepoPulseAgent:
             answer = await self._ask_inner(question, repo)
         except Exception as exc:
             if self.trace is not None:
-                self.trace.record("run_error", error_type=type(exc).__name__, reason=str(exc))
+                self.trace.record("run_error", error_type=type(exc).__name__)
             raise
         if self.trace is not None:
             self.trace.record("run_end", status="completed", degraded=answer.degraded)

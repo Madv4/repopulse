@@ -38,9 +38,9 @@ class TraceWriter:
         """Write one timestamped event after recursively redacting string fields."""
         row = {
             "timestamp": datetime.now(UTC).isoformat(),
+            **_safe(fields),
             "run_id": self.run_id,
             "event": event,
-            **_safe(fields),
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as output:
@@ -77,6 +77,8 @@ def load_trace(directory: Path, run_id: str) -> list[dict[str, Any]]:
     if RUN_ID.fullmatch(run_id) is None:
         raise ValueError("run_id must be a 32-character lowercase hexadecimal ID")
     path = directory / f"{run_id}.jsonl"
+    if not path.resolve().is_relative_to(directory.resolve()):
+        raise ValueError("trace path resolves outside the trace directory")
     if not path.is_file():
         raise FileNotFoundError(f"Trace {run_id} was not found in {directory}")
     events: list[dict[str, Any]] = []

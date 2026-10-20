@@ -1,6 +1,7 @@
 """Render a trace as a self-contained, offline HTML timeline."""
 
 import json
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +14,7 @@ def render_trace_html(events: list[dict[str, Any]], run_id: str, output: Path) -
         .replace("<", "\\u003c")
         .replace(">", "\\u003e")
     )
-    html = _HTML.replace("__TRACE_DATA__", embedded).replace("__RUN_ID__", run_id)
+    html = _HTML.replace("__RUN_ID__", escape(run_id)).replace("__TRACE_DATA__", embedded)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(html, encoding="utf-8")
     return output
@@ -116,11 +117,17 @@ for(const type of [...new Set(events.map(e=>e.event))].sort()){
 function title(e){
   if(e.event==='run_start')return e.question||'Run started';
   if(e.event==='plan')return (e.subquestions||[]).join(' · ')||'Plan';
+  if(e.event==='guardrail')return `${e.guard} · ${e.decision}`;
+  if(e.event==='llm_call')return `${e.stage} · ${e.status} · ${e.latency_ms} ms`;
+  if(e.event==='tool_selection')return `${e.tool} · ${e.selected?'selected':'skipped'}`;
   if(e.event==='tool_call')return `${e.tool} · ${e.status} · ${e.latency_ms} ms`;
   if(e.event==='evidence')return `${e.kind||'source'} · ${e.title||e.url||''}`;
   if(e.event==='memory_read')return `${e.scope||'memory'} · ${e.records?.length||0} records`;
+  if(e.event==='memory_write')return `${e.scope||'memory'} · ${e.status}`;
+  if(e.event==='token_usage')return `${e.budget_units_used} budget units`;
   if(e.event==='final_answer')return e.answer?.summary?.text||'No cited summary';
   if(e.event==='quarantine')return `Excluded ${e.evidence_id}`;
+  if(e.event==='run_end')return e.status||'Run complete';
   return e.reason||e.stage||e.action||e.event;
 }
 function draw(){

@@ -147,6 +147,12 @@ def test_trace_reader_and_viewer_redact_and_escape_local_payload(tmp_path: Path)
     assert "\\u003c/script\\u003e" in html
     assert "<script src=" not in html
     assert "https://fonts." not in html
+    hostile_id = '\"><script>alert(2)</script>'
+    unsafe_title = render_trace_html(events, hostile_id, tmp_path / "safe-title.html").read_text(
+        encoding="utf-8"
+    )
+    assert hostile_id not in unsafe_title
+    assert "&lt;script&gt;" in unsafe_title
     with pytest.raises(ValueError):
         load_trace(tmp_path, "../outside")
 
