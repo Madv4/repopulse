@@ -138,6 +138,7 @@ def evaluate_retrieval(
             variants.append(
                 {
                     "name": key,
+                    "metric_source": "mock LLM suite (retrieval uses no LLM)",
                     "strategy": chunker.name,
                     "reranker": use_reranker,
                     "documents": len(documents),
@@ -145,7 +146,10 @@ def evaluate_retrieval(
                     "hit_rate_at_k": hit_rate,
                     "mrr_at_k": mrr,
                     "latency_seconds": time.perf_counter() - start,
-                    "cases": [result.model_dump() for result in outcomes],
+                    "cases": [
+                        {**result.model_dump(), "metric_source": "mock LLM suite (no LLM)"}
+                        for result in outcomes
+                    ],
                 }
             )
     return variants, rankings
@@ -350,6 +354,7 @@ def evaluate_agent(
         results.append(
             {
                 "id": case["id"],
+                "metric_source": "mock LLM",
                 "kind": case["kind"],
                 "pass": _passed(case, answer.summary),
                 "refused": answer.summary is None,
@@ -367,6 +372,7 @@ def evaluate_agent(
     cited = [row["citation_correct"] for row in results if row["citation_correct"] is not None]
     attacks = [row for row in results if row["kind"] == "adversarial"]
     return {
+        "metric_source": "mock LLM",
         "case_count": total,
         "pass_rate": sum(row["pass"] for row in results) / total,
         "answer_accuracy": sum(row["pass"] for row in results if row["kind"] == "normal")
@@ -445,6 +451,7 @@ def evaluate_baseline(
         results.append(
             {
                 "id": case["id"],
+                "metric_source": "mock LLM",
                 "kind": case["kind"],
                 "pass": _passed(case, summary),
                 "refused": summary is None,
@@ -465,6 +472,7 @@ def evaluate_baseline(
     cited = [row["citation_correct"] for row in results if row["citation_correct"] is not None]
     attacks = [row for row in results if row["kind"] == "adversarial"]
     return {
+        "metric_source": "mock LLM",
         "case_count": total,
         "pass_rate": sum(row["pass"] for row in results) / total,
         "answer_accuracy": sum(row["pass"] for row in results if row["kind"] == "normal")
@@ -523,6 +531,7 @@ def run() -> dict[str, Any]:
     memory_on = evaluate_agent(normal_cases[:10], snapshot, synthetic, rankings, memory=True)
     memory_off = evaluate_agent(normal_cases[:10], snapshot, synthetic, rankings, memory=False)
     payload = {
+        "metric_source": "mock LLM",
         "fixtures": {
             "click_sha256": _sha(SNAPSHOT),
             "synthetic_sha256": _sha(SYNTHETIC),
@@ -556,7 +565,7 @@ def run() -> dict[str, Any]:
 def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
     """Render only measured values from the just-completed run."""
     lines = [
-        "# RepoPulse Phase 6 evaluation",
+        "# RepoPulse Phase 6 evaluation (mock LLM)",
         "",
         "Offline recorded-fixture run with a deterministic mock LLM. These are not real-model ",
         "answer-accuracy estimates. No GitHub or LLM network calls occur in `make eval`.",
@@ -565,7 +574,7 @@ def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
         f"Retrieval cases: {len(payload['retrieval'][0]['cases'])}; "
         f"agent cases: {payload['full_agent']['case_count']}.",
         "",
-        f"## Retrieval (k={config.retrieval_k})",
+        f"## Retrieval (mock LLM suite; ranking uses no LLM; k={config.retrieval_k})",
         "",
         "| Chunking | Reranker | Chunks | Hit rate@k | MRR@k |",
         "| --- | --- | ---: | ---: | ---: |",
@@ -578,7 +587,7 @@ def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
         )
     lines += [
         "",
-        "## Naive RAG versus full agent",
+        "## Naive RAG versus full agent (mock LLM)",
         "",
         "| System | Cases | Pass rate | Answer accuracy (normal) | Citation correctness | "
         "Injection block | Refusal | Mean latency (s) | Budget units | "
@@ -597,7 +606,7 @@ def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
         )
     lines += [
         "",
-        "## Ablations",
+        "## Ablations (mock LLM)",
         "",
         "| Variant | Cases | Pass rate | Injection block |",
         "| --- | ---: | ---: | ---: |",
@@ -637,14 +646,14 @@ def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
     ]
     lines += [
         "",
-        f"CI threshold (configured before run): {config.min_full_agent_pass_rate:.3f}; "
+        f"Mock LLM CI threshold (configured before run): {config.min_full_agent_pass_rate:.3f}; "
         f"result: {'pass' if payload['ci_pass'] else 'fail'}.",
         "Budget units are the agent's character-based reservation or provider usage, "
         "whichever is larger. Mock responses report no provider tokens.",
         "Case latency excludes precomputed embedding search and live network delay.",
         "Mock execution uses no paid service, so its estimated service cost is USD 0. "
         "Provider-reported tokens are zero because the mock does not report token usage. "
-        "Real-model cost: TBD (run make eval).",
+        "Live Groq cost: TBD (run make eval).",
         "Per-case outcomes, rankings, hashes, and raw measured values are in `latest.json`.",
     ]
     LATEST_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -73,6 +73,7 @@ def run() -> dict[str, Any]:
         results.append(
             {
                 "id": case["id"],
+                "metric_source": "live Groq",
                 "question": case["query"],
                 "failure": failure,
                 "answer_correct_url": bool(set(urls) & set(case["relevant_urls"])),
@@ -86,6 +87,7 @@ def run() -> dict[str, Any]:
         )
         print(f"Live case {index + 1}/{len(cases)} complete", flush=True)
     payload = {
+        "metric_source": "live Groq",
         "provider": "groq",
         "model": settings.groq_model,
         "case_count": len(results),
@@ -103,15 +105,15 @@ def run() -> dict[str, Any]:
     LIVE_JSON.parent.mkdir(parents=True, exist_ok=True)
     LIVE_JSON.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     LIVE_MD.write_text(
-        "# Live Groq evaluation\n\n"
-        f"Cases: {payload['case_count']}\n\n"
-        f"Correct labeled URL rate: {payload['answer_correct_url_rate']:.3f}\n\n"
-        f"Non-degraded rate: {payload['non_degraded_rate']:.3f}\n\n"
-        f"Refusal rate: {payload['refusal_rate']:.3f}\n\n"
-        f"Mean latency (s): {payload['mean_latency_seconds']:.3f}\n\n"
-        f"Provider prompt tokens: {payload['provider_prompt_tokens']}\n\n"
-        f"Provider completion tokens: {payload['provider_completion_tokens']}\n\n"
-        "Estimated cost: TBD (run make eval)\n\n"
+        "# Live Groq evaluation (live Groq)\n\n"
+        f"Cases (live Groq): {payload['case_count']}\n\n"
+        f"Correct labeled URL rate (live Groq): {payload['answer_correct_url_rate']:.3f}\n\n"
+        f"Non-degraded rate (live Groq): {payload['non_degraded_rate']:.3f}\n\n"
+        f"Refusal rate (live Groq): {payload['refusal_rate']:.3f}\n\n"
+        f"Mean latency (live Groq, s): {payload['mean_latency_seconds']:.3f}\n\n"
+        f"Provider prompt tokens (live Groq): {payload['provider_prompt_tokens']}\n\n"
+        f"Provider completion tokens (live Groq): {payload['provider_completion_tokens']}\n\n"
+        "Estimated cost (live Groq): TBD (run make eval)\n\n"
         "This optional live run uses free-tier pacing and is not part of CI. "
         "URL correctness is a rule-based label check, not semantic answer grading.\n",
         encoding="utf-8",

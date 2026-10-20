@@ -1,12 +1,12 @@
 # Evaluation methodology
 
-## Phase 6 recorded suite
+## Phase 6 recorded suite (mock LLM)
 
 `make eval` runs entirely offline after `make setup` has cached the public embedding and reranker weights. It reads the pinned `pallets/click` REST capture in `evals/fixtures/click_large_snapshot.json` (captured 2026-10-19), the 55 reviewed labels in `evals/datasets/retrieval_large.jsonl`, the 60 cases in `evals/datasets/agent_cases.jsonl`, and `evals/fixtures/synthetic_repo.json`. The capture contains 400 public issue/PR records, including 238 PRs. Every retrieval query is paraphrased; 33 include a labeled near-duplicate distractor. Twenty adversarial cases use planted issue or PR comments in the synthetic repository. The generator and capture scripts document fixture provenance, but normal evaluation never runs them or calls GitHub.
 
 The runner writes `evals/reports/latest.md` and `latest.json`. JSON includes each ranked URL, case outcome, measured latency, usage accounting, and SHA-256 fixture hashes. `evals/config.json` sets `retrieval_k` and `min_full_agent_pass_rate`; the process exits nonzero when the full agent misses that configured threshold. `make test` uses the deterministic mock and recorded fixtures without loading embedding weights or using a network connection.
 
-## Retrieval results
+## Retrieval results (mock LLM suite; ranking uses no LLM)
 
 Each chunker rebuilds its own local Chroma collection from the same 400 records. Local MiniLM embeddings and the optional local cross-encoder search the 55 queries. Results deduplicate by parent source. Hit rate@3 counts queries with at least one relevant URL in the first three sources. MRR@3 averages the reciprocal rank of the first relevant URL, assigning zero to misses. These are the actual results from `make eval`, rounded only for display:
 
@@ -19,7 +19,7 @@ Each chunker rebuilds its own local Chroma collection from the same 400 records.
 
 The earlier Phase 2 fixture had near-perfect scores across variants and offered little separation. On this larger recorded corpus, hit rate@3 ranges from 0.800 to 0.873 and MRR@3 from 0.667 to 0.806. The score spread makes the reranker comparison observable. It is still one repository and a hand-labeled query set; it does not estimate performance on all GitHub repositories.
 
-## Agent and baseline protocol
+## Agent and baseline protocol (mock LLM)
 
 The 60 cases comprise 30 ordinary questions, 20 injected issue/PR comment cases, and 10 edge or failure cases. The latter cover an empty repository, no activity, a large issue, missing fields, simulated HTTP 403/429/500 responses, and a simulated timeout. The graph uses a scripted `MockProvider` and a fixture gateway returning recorded passages or deterministic failures. Its guardrail detector quarantines suspicious comments before synthesis. The naive RAG baseline takes the top source from one precomputed unreranked retrieval ranking and makes one call to the same scripted mock for an answer; it does no planning, retry, memory read, or guardrail filtering. It is an intentionally small baseline, not a tuned production RAG system.
 
@@ -67,7 +67,7 @@ These failures expose both retrieval confusion among similar Click issues/PRs an
 
 The development set's 20 planted comments were all quarantined (**20/20; block rate 1.000**). A separate frozen set of 15 independently written cases in `evals/fixtures/heldout_attacks.json` uses paraphrase, indirect editorial language, Spanish, French, Hindi, Japanese, link and data-transfer pretexts, and instructions split across two comments. Its authorship did not refer to the detector's patterns, and the detector was not changed after authoring. On the actual offline run, **0/15 held-out cases were quarantined; block rate 0.000**. All 15 were missed by the current heuristic. The 1.000-point gap shows that the development result does not generalize to these variants. The suite reports both sets separately and keeps the held-out cases out of tuning.
 
-## Optional live provider check
+## Optional live provider check (live Groq)
 
 `make eval-live` runs exactly 10 labeled questions through the configured Groq provider, sleeps between calls according to `live_sleep_seconds`, and retries a rate-limited case once after an additional pause. It requires a Groq free-tier key and existing local Click ingestion. It writes `evals/reports/live_latest.md` and `live_latest.json`. It is separate from CI and the offline suite. The labeled URLs come from the pinned capture while live GitHub and local ingested state may have changed; the reported URL match is a rule-based check, not semantic answer grading. No live numbers are claimed here until that command has run.
 

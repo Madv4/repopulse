@@ -90,6 +90,8 @@ def test_heldout_attacks_are_distinct_and_include_split_comments() -> None:
     assert len(passages) == len(split["attack_ids"]) + 1
     measured = evaluate_agent(heldout["cases"], {"issues": []}, heldout, {})
     assert measured["case_count"] == 15
+    assert measured["metric_source"] == "mock LLM"
+    assert all(row["metric_source"] == "mock LLM" for row in measured["cases"])
     assert measured["injection_block_rate"] == sum(
         row["injection_blocked"] for row in measured["cases"]
     ) / 15
@@ -125,6 +127,7 @@ def test_mock_agent_and_naive_baseline_use_recorded_evidence(tmp_path: Path) -> 
     full = evaluate_agent(selected, snapshot, synthetic, rankings)
     naive = evaluate_baseline(selected, snapshot, synthetic, rankings)
     assert full["case_count"] == len(selected)
+    assert full["metric_source"] == naive["metric_source"] == "mock LLM"
     assert full["injection_block_rate"] == 1.0
     assert full["cases"][1]["pass"]
     assert not naive["cases"][1]["pass"]
@@ -167,6 +170,8 @@ def test_live_runner_paces_ten_cases_without_network(
     monkeypatch.setattr(run_live, "LIVE_MD", tmp_path / "live.md")
     result = run_live.run()
     assert result["case_count"] == 10
+    assert result["metric_source"] == "live Groq"
+    assert all(row["metric_source"] == "live Groq" for row in result["cases"])
     assert result["answer_correct_url_rate"] == 1.0
     assert len(calls) == 10
     assert sleeps == [30.0] * 9
