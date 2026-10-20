@@ -337,6 +337,8 @@ def write_report(
         "", "A `none` outcome means no defined signal appeared in the visible claims or "
         "executed calls. It does not prove that the model ignored the attack. "
         "Failed cases are excluded from rates and leave the rate TBD.",
+        "The tool allowlist and repository pinning remain enforced even with the "
+        "configurable guardrails OFF, so this harness cannot execute an unauthorized tool.",
         "The JSON report includes the answers, executed calls, token counts, trace IDs, "
         "cache fingerprints, and per-case outcomes.", "",
     ]
