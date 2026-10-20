@@ -32,6 +32,7 @@ def run() -> dict[str, Any]:
         failure = ""
         elapsed = 0.0
         for attempt in range(2):
+            answer = {}
             started = time.perf_counter()
             completed = subprocess.run(
                 [
@@ -55,7 +56,8 @@ def run() -> dict[str, Any]:
             )
             elapsed += time.perf_counter() - started
             try:
-                answer = json.loads(completed.stdout)
+                decoded = json.loads(completed.stdout)
+                answer = decoded if isinstance(decoded, dict) else {}
             except json.JSONDecodeError:
                 failure = "invalid_cli_output"
             if completed.returncode == 0 and answer:
@@ -64,7 +66,7 @@ def run() -> dict[str, Any]:
             if "HTTP 429" in completed.stderr and attempt == 0:
                 time.sleep(max(config.live_sleep_seconds, 60))
                 continue
-            failure = "provider_or_cli_failure"
+            failure = "provider_or_cli_failure" if answer else "invalid_cli_output"
             break
         summary = answer.get("summary")
         urls = summary.get("citations", []) if isinstance(summary, dict) else []

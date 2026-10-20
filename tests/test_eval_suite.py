@@ -2,8 +2,13 @@
 
 import asyncio
 import json
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
+from pytest import MonkeyPatch
+
+from evals import run_live
 from evals.run_suite import (
     AGENT_CASES,
     RETRIEVAL_CASES,
@@ -104,3 +109,39 @@ def test_mock_agent_and_naive_baseline_use_recorded_evidence(tmp_path: Path) -> 
         rankings,
         rerank=True,
     )[0].excerpt
+
+
+def test_live_runner_paces_ten_cases_without_network(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    labels = _lines(RETRIEVAL_CASES)[:10]
+    calls: list[list[str]] = []
+    sleeps: list[float] = []
+
+    def fake_subprocess(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        answer = {
+            "summary": {"citations": [labels[len(calls) - 1]["relevant_urls"][0]]},
+            "degraded": False,
+            "provider_prompt_tokens": 12,
+            "provider_completion_tokens": 4,
+        }
+        return subprocess.CompletedProcess(command, 0, json.dumps(answer), "")
+
+    monkeypatch.setattr(
+        run_live,
+        "Settings",
+        lambda: SimpleNamespace(llm_provider="groq", groq_api_key="test", groq_model="mock"),
+    )
+    monkeypatch.setattr(run_live.subprocess, "run", fake_subprocess)
+    monkeypatch.setattr(run_live.time, "sleep", sleeps.append)
+    monkeypatch.setattr(run_live, "LIVE_JSON", tmp_path / "live.json")
+    monkeypatch.setattr(run_live, "LIVE_MD", tmp_path / "live.md")
+    result = run_live.run()
+    assert result["case_count"] == 10
+    assert result["answer_correct_url_rate"] == 1.0
+    assert len(calls) == 10
+    assert sleeps == [30.0] * 9
+    assert result["provider_prompt_tokens"] == 120
+    assert (tmp_path / "live.json").exists()
+    assert (tmp_path / "live.md").exists()
