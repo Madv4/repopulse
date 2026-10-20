@@ -604,6 +604,7 @@ def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
         f"result: {'pass' if payload['ci_pass'] else 'fail'}.",
         "Budget units are the agent's character-based reservation or provider usage, "
         "whichever is larger. Mock responses report no provider tokens.",
+        "Case latency excludes precomputed embedding search and live network delay.",
         "Mock execution uses no paid service, so its estimated service cost is USD 0. "
         "Provider-reported tokens are zero because the mock does not report token usage. "
         "Real-model cost: TBD (run make eval).",

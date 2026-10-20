@@ -91,7 +91,7 @@ The offline suite measured 55 labeled queries over 400 recorded issue/PR documen
 | Structure-aware | Off | 1279 | 0.818 | 0.709 |
 | Structure-aware | On | 1279 | 0.873 | 0.779 |
 
-The fixture hashes, per-query rankings, agent outcomes, baseline comparison, and ablations are in the generated JSON. These are local recorded-fixture results, not estimates of real-model answer quality. The historical Phase 2 report remains in `evals/reports/retrieval_report.md`.
+The same offline run measured a 0.433 pass rate for single-retrieval naive RAG and 0.783 for the full agent across 60 cases; the planted-attack quarantine rate was 1.000 for the full agent and 0.000 for the baseline. The fixture hashes, per-query rankings, case outcomes, and ablations are in the generated JSON. These are local recorded-fixture results, not estimates of real-model answer quality. The historical Phase 2 report remains in `evals/reports/retrieval_report.md`.
 
 ## Phase roadmap
 
