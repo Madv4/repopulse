@@ -34,6 +34,7 @@ SNAPSHOT = ROOT / "fixtures/click_large_snapshot.json"
 RETRIEVAL_CASES = ROOT / "datasets/retrieval_large.jsonl"
 AGENT_CASES = ROOT / "datasets/agent_cases.jsonl"
 SYNTHETIC = ROOT / "fixtures/synthetic_repo.json"
+HELDOUT = ROOT / "fixtures/heldout_attacks.json"
 CONFIG = ROOT / "config.json"
 LATEST_JSON = ROOT / "reports/latest.json"
 LATEST_MD = ROOT / "reports/latest.md"
@@ -228,19 +229,27 @@ def _case_evidence(
 ) -> list[Evidence]:
     kind = case["kind"]
     if kind == "adversarial":
-        comment = comments[case["attack_id"]]
-        issue = issues[comment["parent_url"]]
-        return [
+        attack_ids = case["attack_ids"] if "attack_ids" in case else [case["attack_id"]]
+        selected_comments = [comments[attack_id] for attack_id in attack_ids]
+        parent_url = selected_comments[0]["parent_url"]
+        if any(comment["parent_url"] != parent_url for comment in selected_comments):
+            raise ValueError("Attack comment parts must belong to one issue or PR")
+        issue = issues[parent_url]
+        evidence = [
             Evidence(
                 url=comment["parent_url"],
                 kind=comment["kind"],
                 title=f"Comment by attacker: {comment['body']}",
                 excerpt=comment["body"],
-            ),
+            )
+            for comment in selected_comments
+        ]
+        evidence.append(
             Evidence(
                 url=issue["url"], kind=issue["kind"], title=issue["title"], excerpt=issue["body"]
-            ),
-        ]
+            )
+        )
+        return evidence
     if kind == "huge_issue":
         source = rows[case["expected_url"]]
         return [
@@ -481,12 +490,18 @@ def run() -> dict[str, Any]:
     config = EvalConfig.model_validate_json(CONFIG.read_text(encoding="utf-8"))
     snapshot = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
     synthetic = json.loads(SYNTHETIC.read_text(encoding="utf-8"))
+    heldout = json.loads(HELDOUT.read_text(encoding="utf-8"))
     retrieval_cases = [RetrievalCase.model_validate(row) for row in _lines(RETRIEVAL_CASES)]
     agent_cases = _lines(AGENT_CASES)
     if len(agent_cases) < 60 or sum(c["kind"] == "adversarial" for c in agent_cases) < 20:
         raise ValueError("Phase 6 requires 60 cases including 20 attacks")
+    if len(heldout["cases"]) != 15 or not all(
+        case["kind"] == "adversarial" for case in heldout["cases"]
+    ):
+        raise ValueError("Held-out attack fixture requires 15 adversarial cases")
     variants, rankings = evaluate_retrieval(snapshot, retrieval_cases, config, Settings())
     full = evaluate_agent(agent_cases, snapshot, synthetic, rankings)
+    heldout_result = evaluate_agent(heldout["cases"], snapshot, heldout, rankings)
     baseline = evaluate_baseline(agent_cases, snapshot, synthetic, rankings)
     guardrails_off = evaluate_agent(
         [c for c in agent_cases if c["kind"] == "adversarial"],
@@ -511,6 +526,7 @@ def run() -> dict[str, Any]:
         "fixtures": {
             "click_sha256": _sha(SNAPSHOT),
             "synthetic_sha256": _sha(SYNTHETIC),
+            "heldout_sha256": _sha(HELDOUT),
             "retrieval_labels_sha256": _sha(RETRIEVAL_CASES),
             "agent_cases_sha256": _sha(AGENT_CASES),
             "captured_at": snapshot["captured_at"],
@@ -519,6 +535,7 @@ def run() -> dict[str, Any]:
         "config": config.model_dump(),
         "retrieval": variants,
         "full_agent": full,
+        "heldout_adversarial": heldout_result,
         "naive_rag": baseline,
         "ablations": {
             "guardrails_off": guardrails_off,
@@ -598,6 +615,26 @@ def _write_markdown(payload: dict[str, Any], config: EvalConfig) -> None:
             if block is not None
             else f"| {label} | {item['case_count']} | {item['pass_rate']:.3f} | n/a |"
         )
+    dev = payload["full_agent"]
+    heldout = payload["heldout_adversarial"]
+    dev_cases = [case for case in dev["cases"] if case["kind"] == "adversarial"]
+    heldout_cases = heldout["cases"]
+    lines += [
+        "",
+        "## Adversarial holdout (offline mock LLM)",
+        "",
+        "| Set | Blocked / cases | Injection block rate |",
+        "| --- | ---: | ---: |",
+        f"| Development | {sum(case['injection_blocked'] for case in dev_cases)}"
+        f"/{len(dev_cases)} | {dev['injection_block_rate']:.3f} |",
+        f"| Held-out | {sum(case['injection_blocked'] for case in heldout_cases)}"
+        f"/{len(heldout_cases)} | {heldout['injection_block_rate']:.3f} |",
+        "",
+        "The held-out attacks were authored without consulting detector patterns and "
+        "were not used to tune the detector. These rates measure the same fixed heuristic "
+        "on two different synthetic sets; development-set success does not imply broad "
+        "prompt-injection coverage.",
+    ]
     lines += [
         "",
         f"CI threshold (configured before run): {config.min_full_agent_pass_rate:.3f}; "

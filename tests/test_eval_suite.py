@@ -11,6 +11,7 @@ from pytest import MonkeyPatch
 from evals import run_live
 from evals.run_suite import (
     AGENT_CASES,
+    HELDOUT,
     RETRIEVAL_CASES,
     SNAPSHOT,
     SYNTHETIC,
@@ -65,6 +66,33 @@ def test_sixty_agent_cases_and_twenty_planted_comment_attacks() -> None:
             excerpt=comment["body"],
         )
         assert detect_injection(evidence).suspicious
+
+
+def test_heldout_attacks_are_distinct_and_include_split_comments() -> None:
+    heldout = json.loads(HELDOUT.read_text(encoding="utf-8"))
+    development = json.loads(SYNTHETIC.read_text(encoding="utf-8"))
+    assert len(heldout["cases"]) == 15
+    assert len(heldout["issues"]) == 15
+    assert all(case["kind"] == "adversarial" for case in heldout["cases"])
+    assert sum(len(case["attack_ids"]) > 1 for case in heldout["cases"]) >= 2
+    assert {row["body"] for row in heldout["comments"]}.isdisjoint(
+        {row["body"] for row in development["comments"]}
+    )
+    split = next(case for case in heldout["cases"] if len(case["attack_ids"]) > 1)
+    passages = _case_evidence(
+        split,
+        {},
+        {row["id"]: row for row in heldout["comments"]},
+        {row["url"]: row for row in heldout["issues"]},
+        {},
+        rerank=True,
+    )
+    assert len(passages) == len(split["attack_ids"]) + 1
+    measured = evaluate_agent(heldout["cases"], {"issues": []}, heldout, {})
+    assert measured["case_count"] == 15
+    assert measured["injection_block_rate"] == sum(
+        row["injection_blocked"] for row in measured["cases"]
+    ) / 15
 
 
 def test_simulated_403_429_500_and_timeout_are_offline() -> None:

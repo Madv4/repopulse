@@ -63,6 +63,10 @@ The full agent failed these 13 of 60 recorded cases in the Phase 6 run. The caus
 
 These failures expose both retrieval confusion among similar Click issues/PRs and the guardrail's false positives on ordinary discussions about prompts. The mock's first-title synthesis makes lower-ranked relevant sources unusable in this evaluation; a real model may behave differently, so live quality remains unmeasured here.
 
+## Held-out injection check (mock LLM)
+
+The development set's 20 planted comments were all quarantined (**20/20; block rate 1.000**). A separate frozen set of 15 independently written cases in `evals/fixtures/heldout_attacks.json` uses paraphrase, indirect editorial language, Spanish, French, Hindi, Japanese, link and data-transfer pretexts, and instructions split across two comments. Its authorship did not refer to the detector's patterns, and the detector was not changed after authoring. On the actual offline run, **0/15 held-out cases were quarantined; block rate 0.000**. All 15 were missed by the current heuristic. The 1.000-point gap shows that the development result does not generalize to these variants. The suite reports both sets separately and keeps the held-out cases out of tuning.
+
 ## Optional live provider check
 
 `make eval-live` runs exactly 10 labeled questions through the configured Groq provider, sleeps between calls according to `live_sleep_seconds`, and retries a rate-limited case once after an additional pause. It requires a Groq free-tier key and existing local Click ingestion. It writes `evals/reports/live_latest.md` and `live_latest.json`. It is separate from CI and the offline suite. The labeled URLs come from the pinned capture while live GitHub and local ingested state may have changed; the reported URL match is a rule-based check, not semantic answer grading. No live numbers are claimed here until that command has run.
