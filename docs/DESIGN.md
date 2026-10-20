@@ -2,7 +2,7 @@
 
 ## Scope and phases
 
-RepoPulse follows the requested eight-phase delivery order. This document records implementation choices as they are made. Phase 1 stopped at package infrastructure, provider adapters, and GitHub data transport; later sections describe implemented phases through Phase 6.
+RepoPulse follows the requested eight-phase delivery order. This document records implementation choices as they are made. Phase 1 stopped at package infrastructure, provider adapters, and GitHub data transport; later sections describe implemented phases through Phase 7.
 
 ## Phase 1
 
@@ -98,7 +98,7 @@ Sources: [repository issue comments](https://docs.github.com/en/rest/issues/comm
 
 The final-answer verifier requires each free-form claim to name retrieved evidence ID(s) and a verbatim quote span of at most 30 words for each ID. It checks quote membership in the exact retrieved title or excerpt and resolves citation URLs from those IDs; invalid claims are removed. This permits paraphrasing, but quote membership alone cannot establish semantic entailment. Memory summary promotion retains its stricter full-text rule.
 
-An LLM planning, selection, decision, or synthesis fallback sets `degraded` and records safe reasons in the answer. The CLI prints a `DEGRADED` line and writes those reasons to a local JSONL trace. Structured-output failures additionally record the failing model response with secrets redacted under ignored `traces/`. Full run tracing remains a Phase 7 task. `doctor --live` makes a single completion request to the selected model; success checks that the provider accepts the configured model name. The ordinary `doctor` makes no request.
+An LLM planning, selection, decision, or synthesis fallback sets `degraded` and records safe reasons in the answer. The CLI prints a `DEGRADED` line and writes those reasons to a local JSONL trace. Structured-output failures additionally record the failing model response with secrets redacted under ignored `traces/`. Phase 7 extends this to a full run timeline. `doctor --live` makes a single completion request to the selected model; success checks that the provider accepts the configured model name. The ordinary `doctor` makes no request.
 
 ## Phase 4
 
@@ -127,3 +127,11 @@ The live quote-grounding repair is documented in `docs/LIVE_QUOTE_REPAIR.md`. Qu
 The evaluation suite uses a pinned 400-item public Click issue/PR snapshot, 55 reviewed source-URL retrieval labels, and 60 agent cases. It reads the committed fixtures unchanged on every run. Retrieval is measured for fixed and structure chunking with and without the local reranker. The offline agent run uses the actual LangGraph state machine, scripted mock LLM, and fixture-backed MCP-style gateway; deterministic 403, 429, 500, and timeout cases exercise its retry path. A synthetic repository carries 20 planted malicious comments. The naive baseline makes one retrieval and one call to the same mock without planning or guardrails. Ablations rerun scoped subsets with guardrails, reranking, or memory switched off/on.
 
 `make eval` writes a Markdown summary and JSON with per-case results and fixture hashes, then enforces the pass-rate threshold in `evals/config.json`. Reported latency is local elapsed time, and token budget units are character-based estimates unless provider usage is larger. The mock reports no actual tokenizer usage; its hosted-service cost is zero. Optional `make eval-live` runs ten labeled cases through Groq with configured pauses, using the free tier and existing local ingestion. The live results are excluded from CI. See `docs/EVALUATION.md` for score definitions, actual results, and validity limits.
+
+## Phase 7
+
+The agent appends timestamped JSONL events as each stage completes. The answer carries the run ID, and `repopulse trace show <run_id>` reads that run back. This records the question and budgets, each plan and decision, every tool attempt with arguments, result summary and latency, the disposition of retrieved evidence, memory reads and writes, guardrail events, usage accounting, and the final validated answer. Fallbacks and rejected claims stay visible in the same timeline. Explicit CLI `memory add` and `forget` operations emit long-term write events; ordinary `ask` never silently promotes GitHub content into SQLite.
+
+The HTML viewer is a single file built from the JSONL events. It embeds escaped JSON, uses DOM text nodes for all event values, and loads no external assets. The example in `docs/` comes from a recorded Click fixture through the mock provider, so it can be regenerated without API requests. A browser screenshot in the README shows the viewer without requiring a live run.
+
+The writer redacts common output secrets recursively and keeps traces outside Git. This is best effort: a private fact not matched by the redactor can still appear in a user question, a retrieved excerpt, a memory record, or a failed model response. The system has no automatic retention schedule or remote telemetry. See `docs/OBSERVABILITY.md` for event fields and inspection commands.

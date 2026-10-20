@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RepoPulse trace 357f702804c74fa884c64d5df5b93390</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1118;--panel:#121c27;--line:#273647;
+--text:#e8f0f5;--muted:#9db0bf;--mint:#65e5c5;--amber:#ffc878;--red:#ff858c}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 80% 0%,#1b3440 0%,var(--bg) 35%);
+color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.shell{max-width:1180px;margin:0 auto;padding:42px 26px 80px}
+.eyebrow{color:var(--mint);font-size:12px;font-weight:800;letter-spacing:.18em;
+text-transform:uppercase}
+h1{font-size:clamp(32px,5vw,56px);line-height:1.1;margin:10px 0 12px;letter-spacing:-.04em}
+.sub{color:var(--muted);max-width:800px;margin:0 0 28px}
+.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin:28px 0 30px}
+.card{background:linear-gradient(150deg,#172633,var(--panel));border:1px solid var(--line);
+border-radius:16px;padding:18px;min-height:105px}
+.card strong{display:block;font-size:31px;line-height:1.2;color:var(--mint)}
+.card span{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 22px}
+input,select{background:#14212c;border:1px solid #345063;border-radius:10px;
+color:var(--text);padding:11px 13px;font:inherit}
+input{min-width:300px;flex:1}
+.count{color:var(--muted);font-size:13px}
+.timeline{border-left:2px solid var(--line);margin-left:12px;padding-left:25px}
+.event{position:relative;background:var(--panel);border:1px solid var(--line);
+border-radius:15px;padding:17px 19px;margin:0 0 14px;box-shadow:0 8px 25px #0002}
+.event:before{content:"";position:absolute;left:-33px;top:25px;width:12px;height:12px;
+border-radius:50%;background:var(--mint);box-shadow:0 0 0 5px var(--bg)}
+.event.warn:before{background:var(--amber)}.event.fail:before{background:var(--red)}
+.eventhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-block;border:1px solid #3d736e;color:var(--mint);background:#173533;
+border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;letter-spacing:.07em}
+.warn .badge{color:var(--amber);border-color:#866b44;background:#382b20}
+.fail .badge{color:var(--red);border-color:#854249;background:#382329}
+time{color:var(--muted);font-size:12px}
+.event h2{font-size:17px;margin:10px 0 4px;overflow-wrap:anywhere}
+details{margin-top:10px}summary{color:var(--muted);cursor:pointer;font-size:13px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b151e;border:1px solid var(--line);
+border-radius:10px;padding:13px;color:#c5d6e0;max-height:480px;overflow:auto;font-size:12px}
+.footer{color:var(--muted);font-size:12px;margin-top:26px}
+@media(max-width:720px){.cards{grid-template-columns:repeat(2,1fr)}.shell{padding:26px 16px}
+input{min-width:100%}}
+</style>
+</head>
+<body>
+<main class="shell">
+<div class="eyebrow">RepoPulse / local observability</div>
+<h1>Agent run trace</h1>
+<p class="sub">A chronological view of planning, tools, evidence, guardrails, memory,
+usage, and the final answer. Run ID <span class="mono">357f702804c74fa884c64d5df5b93390</span>.</p>
+<section class="cards" id="stats" aria-label="Run summary"></section>
+<div class="toolbar">
+<input id="search" type="search" placeholder="Filter events or evidence…"
+aria-label="Filter trace events">
+<select id="kind" aria-label="Event type"><option value="">All events</option></select>
+<span class="count" id="count"></span>
+</div>
+<section class="timeline" id="timeline" aria-label="Trace events"></section>
+<p class="footer">Generated locally from a redacted JSONL trace. No network assets or
+scripts are loaded. Retrieved source text may still contain sensitive data.</p>
+</main>
+<script id="trace-data" type="application/json">[{"timestamp": "2026-10-20T06:16:59.072493+00:00", "question": "Which issue reports ANSI escape codes breaking style?", "repo": "pallets/click", "provider": "mock", "max_steps": 8, "token_budget": 8000, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "run_start"}, {"timestamp": "2026-10-20T06:16:59.073653+00:00", "guard": "input_validation", "decision": "accepted", "run_id": "357f702804c74fa884c64d5df5b93390", "event": "guardrail"}, {"timestamp": "2026-10-20T06:16:59.080323+00:00", "scope": "session", "records": [], "run_id": "357f702804c74fa884c64d5df5b93390", "event": "memory_read"}, {"timestamp": "2026-10-20T06:16:59.080872+00:00", "scope": "long_term", "records": [{"id": "aa9f5f458f6e43c3ab24eb8daf8c8f21", "text": "I prefer concise Click issue summaries.", "kind": "preference", "source": "user", "repo": "pallets/click", "confidence": 1.0, "created_at": "2026-10-20T06:16:59.059106Z", "expires_at": null, "source_urls": []}], "run_id": "357f702804c74fa884c64d5df5b93390", "event": "memory_read"}, {"timestamp": "2026-10-20T06:16:59.081359+00:00", "stage": "planning", "provider": "mock", "model": "mock", "status": "ok", "latency_ms": 0.016, "prompt_characters": 387, "completion_characters": 46, "budget_units_used": 107, "provider_prompt_tokens": 0, "provider_completion_tokens": 0, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "llm_call"}, {"timestamp": "2026-10-20T06:16:59.081781+00:00", "subquestions": ["find the ANSI style issue"], "replan_index": 0, "decision": "continue", "run_id": "357f702804c74fa884c64d5df5b93390", "event": "plan"}, {"timestamp": "2026-10-20T06:16:59.083885+00:00", "stage": "tool_selection", "provider": "mock", "model": "mock", "status": "ok", "latency_ms": 0.024, "prompt_characters": 348, "completion_characters": 56, "budget_units_used": 101, "provider_prompt_tokens": 0, "provider_completion_tokens": 0, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "llm_call"}, {"timestamp": "2026-10-20T06:16:59.084614+00:00", "tool": "semantic_search", "args": {"query": "ANSI style", "repo": "pallets/click"}, "selected": true, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "tool_selection"}, {"timestamp": "2026-10-20T06:16:59.085938+00:00", "tool": "semantic_search", "args": {"query": "ANSI style", "repo": "pallets/click"}, "step": 1, "attempt": 1, "status": "ok", "latency_ms": 0.016, "result_summary": {"count": 1, "evidence_ids": ["6f9987dcfc69e294742e"], "urls": ["https://github.com/pallets/click/issues/3887"]}, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "tool_call"}, {"timestamp": "2026-10-20T06:16:59.087816+00:00", "tool": "semantic_search", "disposition": "accepted", "evidence_id": "6f9987dcfc69e294742e", "url": "https://github.com/pallets/click/issues/3887", "kind": "issue", "title": "ANSI escape codes break style()", "excerpt": "When using `style()` or `secho()` to write colored logs on the shell, it can sometimes be short-circuited if the log we try to apply color to is already colored with ANSI escape codes. \n\nThis is an issue when trying to color output from a file for example, when you want to highlight certain words (think of grep).\n\n## Replicate\n```\nansi_red = \"\\033[0;31m\"\nansi_endcolor = \"\\033[0m\"\nclick.secho(f\"{ansi_red}This should be blue{ansi_endcolor}\", fg=\"blue\")\n```\n### output :\n$\\color{red}\\textsf{This should be blue}$\n\n### Expected output :\n$\\color{blue}\\textsf{This should be blue}$\n\nEnvironment:\n\n- Python version: 3.9.25\n- Click version: 8.1.8\n\n_Also present in latest :_\n\n- Python version: 3.10.0\n- Click version: 8.5.0", "run_id": "357f702804c74fa884c64d5df5b93390", "event": "evidence"}, {"timestamp": "2026-10-20T06:16:59.089572+00:00", "stage": "evidence_decision", "provider": "mock", "model": "mock", "status": "ok", "latency_ms": 0.007, "prompt_characters": 1367, "completion_characters": 19, "budget_units_used": 345, "provider_prompt_tokens": 0, "provider_completion_tokens": 0, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "llm_call"}, {"timestamp": "2026-10-20T06:16:59.089935+00:00", "action": "enough", "evidence_count": 1, "steps": 1, "replans": 0, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "decision"}, {"timestamp": "2026-10-20T06:16:59.091549+00:00", "stage": "synthesis", "provider": "mock", "model": "mock", "status": "ok", "latency_ms": 0.028, "prompt_characters": 1661, "completion_characters": 192, "budget_units_used": 463, "provider_prompt_tokens": 0, "provider_completion_tokens": 0, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "llm_call"}, {"timestamp": "2026-10-20T06:16:59.092136+00:00", "guard": "output_redaction", "decision": "applied", "run_id": "357f702804c74fa884c64d5df5b93390", "event": "guardrail"}, {"timestamp": "2026-10-20T06:16:59.092479+00:00", "budget_units_used": 1016, "provider_prompt_tokens": 0, "provider_completion_tokens": 0, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "token_usage"}, {"timestamp": "2026-10-20T06:16:59.092838+00:00", "answer": {"summary": {"text": "Click issue 3887 reports ANSI escape codes interfering with style().", "evidence": [{"evidence_id": "6f9987dcfc69e294742e", "quote": "ANSI escape codes break style()"}], "citations": ["https://github.com/pallets/click/issues/3887"]}, "key_changes": [], "risks": [], "limitations": [], "degraded": false, "degradation_reasons": [], "trace_id": "357f702804c74fa884c64d5df5b93390", "action_plan": null, "budget_units_used": 1016, "provider_prompt_tokens": 0, "provider_completion_tokens": 0}, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "final_answer"}, {"timestamp": "2026-10-20T06:16:59.093642+00:00", "scope": "session", "status": "stored", "turn": {"question": "Which issue reports ANSI escape codes breaking style?", "cited_urls": ["https://github.com/pallets/click/issues/3887"]}, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "memory_write"}, {"timestamp": "2026-10-20T06:16:59.094097+00:00", "scope": "long_term", "status": "none", "reason": "Agent ask never auto-writes retrieved GitHub content to SQLite.", "run_id": "357f702804c74fa884c64d5df5b93390", "event": "memory_write"}, {"timestamp": "2026-10-20T06:16:59.094554+00:00", "status": "completed", "degraded": false, "run_id": "357f702804c74fa884c64d5df5b93390", "event": "run_end"}]</script>
+<script>
+const events=JSON.parse(document.getElementById('trace-data').textContent);
+const $=id=>document.getElementById(id);
+const tool=events.filter(e=>e.event==='tool_call');
+const evidence=events.filter(e=>e.event==='evidence');
+const blocked=events.filter(e=>e.event==='quarantine');
+const final=events.findLast(e=>e.event==='final_answer');
+const budget=final?.answer?.budget_units_used??0;
+for(const [name,value] of [
+  ['Events',events.length],['Tool attempts',tool.length],
+  ['Evidence passages',evidence.length],['Quarantined',blocked.length]
+]){
+  const box=document.createElement('div');box.className='card';
+  const strong=document.createElement('strong');strong.textContent=String(value);
+  const span=document.createElement('span');span.textContent=name;
+  box.append(strong,span);$('stats').append(box);
+}
+const budgetBox=document.createElement('div');budgetBox.className='card';
+budgetBox.style.gridColumn='1 / -1';
+const budgetText=document.createElement('span');
+budgetText.textContent='Budget units used (character estimate or provider usage)';
+const budgetValue=document.createElement('strong');budgetValue.textContent=String(budget);
+budgetBox.append(budgetValue,budgetText);$('stats').append(budgetBox);
+for(const type of [...new Set(events.map(e=>e.event))].sort()){
+  const option=document.createElement('option');option.value=type;option.textContent=type;
+  $('kind').append(option);
+}
+function title(e){
+  if(e.event==='run_start')return e.question||'Run started';
+  if(e.event==='plan')return (e.subquestions||[]).join(' · ')||'Plan';
+  if(e.event==='guardrail')return `${e.guard} · ${e.decision}`;
+  if(e.event==='llm_call')return `${e.stage} · ${e.status} · ${e.latency_ms} ms`;
+  if(e.event==='tool_selection')return `${e.tool} · ${e.selected?'selected':'skipped'}`;
+  if(e.event==='tool_call')return `${e.tool} · ${e.status} · ${e.latency_ms} ms`;
+  if(e.event==='evidence')return `${e.kind||'source'} · ${e.title||e.url||''}`;
+  if(e.event==='memory_read')return `${e.scope||'memory'} · ${e.records?.length||0} records`;
+  if(e.event==='memory_write')return `${e.scope||'memory'} · ${e.status}`;
+  if(e.event==='token_usage')return `${e.budget_units_used} budget units`;
+  if(e.event==='final_answer')return e.answer?.summary?.text||'No cited summary';
+  if(e.event==='quarantine')return `Excluded ${e.evidence_id}`;
+  if(e.event==='run_end')return e.status||'Run complete';
+  return e.reason||e.stage||e.action||e.event;
+}
+function draw(){
+  const needle=$('search').value.toLocaleLowerCase();const type=$('kind').value;
+  $('timeline').replaceChildren();let shown=0;
+  for(const e of events){
+    if(type&&e.event!==type)continue;
+    if(needle&&!JSON.stringify(e).toLocaleLowerCase().includes(needle))continue;
+    shown++;
+    const card=document.createElement('article');card.className='event';
+    if(['quarantine','degradation','validation_failure'].includes(e.event))
+      card.classList.add('warn');
+    if(e.status==='error'||e.event==='run_error'||e.event==='claim_rejection')
+      card.classList.add('fail');
+    const head=document.createElement('div');head.className='eventhead';
+    const badge=document.createElement('span');badge.className='badge';
+    badge.textContent=e.event.replaceAll('_',' ');
+    const when=document.createElement('time');when.textContent=e.timestamp||'';
+    head.append(badge,when);
+    const h=document.createElement('h2');h.textContent=title(e);
+    const details=document.createElement('details');
+    const summary=document.createElement('summary');summary.textContent='Inspect event data';
+    const pre=document.createElement('pre');pre.textContent=JSON.stringify(e,null,2);
+    details.append(summary,pre);card.append(head,h,details);$('timeline').append(card);
+  }
+  $('count').textContent=`${shown} of ${events.length} events`;
+}
+$('search').addEventListener('input',draw);$('kind').addEventListener('change',draw);draw();
+</script>
+</body>
+</html>
