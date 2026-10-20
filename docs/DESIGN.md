@@ -2,7 +2,7 @@
 
 ## Scope and phases
 
-RepoPulse follows the requested eight-phase delivery order. This document records implementation choices as they are made. Phase 1 stopped at package infrastructure, provider adapters, and GitHub data transport; later sections describe implemented phases through Phase 7.
+RepoPulse follows the requested eight-phase delivery order. This document records the implemented system through Phase 8, including earlier repairs and measured limits. Phase 1 stopped at package infrastructure, provider adapters, and GitHub data transport; later phases added retrieval, the agent, memory, guardrails, evaluation, observability, and CI.
 
 ## Phase 1
 
@@ -22,7 +22,7 @@ The client follows the API's [`Link` pagination header](https://docs.github.com/
 
 ### Dependencies and reproducibility
 
-The Phase 1 runtime depends only on `httpx`, `pydantic`, and `pydantic-settings`. The package uses the `src/` layout and supports Python 3.11+. `pytest`, `ruff`, and `mypy` are dev dependencies. Unit tests use only deterministic HTTP fixtures. The Makefile works with a Python virtual environment on Unix and Windows GNU Make. It reserves `eval` and `demo` target names without suggesting those later phases are complete.
+The Phase 1 runtime depended only on `httpx`, `pydantic`, and `pydantic-settings`. The package uses the `src/` layout and supports Python 3.11+. `pytest`, `ruff`, and `mypy` are dev dependencies. Unit tests use only deterministic HTTP fixtures. The Makefile works with a Python virtual environment on Unix and Windows GNU Make. Its initial placeholder `eval` and `demo` targets were implemented in later phases.
 
 Plain Python is the clearer fit for configuration, provider adapters, and HTTP transport: these operations are single calls with no branching agent state to orchestrate. LangGraph enters in Phase 3 for the plan, tool, observe, and replan loop, where explicit state transitions matter.
 
@@ -118,7 +118,7 @@ Short-term memory is a six-turn in-process window. It keeps user questions and c
 
 ## Phase 5
 
-The agent checks question bounds and scope before the graph, and direct write requests become inert dry-run `action_plan` objects. The MCP surface remains read-only. At the tool-result boundary, a heuristic detector quarantines suspicious passages and traces their IDs and reasons. Accepted passages enter decision and synthesis prompts only inside escaped `untrusted_data` blocks with an explicit data-only instruction. Output redaction runs after citation verification, so a source quote can be checked exactly and then obscured if it contains contact information or credentials. The seven `GUARD_*` settings in `docs/THREAT_MODEL.md` permit individual Phase 6 ablations. Structural type checks remain in place even when the extra structured-output retry is disabled.
+The agent checks question bounds and scope before the graph, and direct write requests become inert dry-run `action_plan` objects. The MCP surface remains read-only. At the tool-result boundary, a heuristic detector quarantines suspicious passages and traces their IDs and reasons. Accepted passages enter decision and synthesis prompts only inside escaped `untrusted_data` blocks with an explicit data-only instruction. Output redaction runs after citation verification, so a source quote can be checked exactly and then obscured if it contains contact information or credentials. The eight `GUARD_*` settings, including the later optional classifier switch, are listed in `docs/THREAT_MODEL.md` and permit individual ablations. Structural type checks remain in place even when the extra structured-output retry is disabled.
 
 The live quote-grounding repair is documented in `docs/LIVE_QUOTE_REPAIR.md`. Quote matching now normalizes Unicode and whitespace, without relaxing evidence IDs or the 30-word bound. Rejected claims produce local diagnostic trace events and one feedback-guided synthesis retry. A JSON-mode HTTP 400 receives one text-mode JSON retry.
 
@@ -139,3 +139,13 @@ The writer redacts common output secrets recursively and keeps traces outside Gi
 ## Prompt-injection follow-up before Phase 8
 
 The optional LLM injection classifier sits after the deterministic pattern detector and before retrieved evidence enters the planning graph's decision or synthesis prompts. It uses the selected provider through the shared `LLMProvider` interface, asks for a small structured verdict, and validates it with Pydantic. The cache key binds a SHA-256 hash of the passage content to the provider, model, and classifier prompt version. A second pass examines related passages from the same source together, because the instruction may be split across comments. Classifier calls count toward the agent's budget and appear in the run trace. The default mock and CI paths leave this layer off; provider failures produce a degraded heuristic-only answer. The development attack classes informed the design, but the frozen held-out v1 set did not tune the prompt or decision threshold.
+
+## Benign false-positive audit before Phase 8
+
+The 400-item Click fixture records issue/PR comment counts, not comment text. A separate network capture selected 200 real comments created before that parent snapshot's cutoff from the same 400 parent IDs, saved their bodies in a committed fixture, and recorded the parent SHA-256. The heuristic and live classifier each reviewed every comment independently, allowing standalone and union false-positive proxy rates on the same denominator. The live classifier was pinned to Groq `openai/gpt-oss-20b` for this audit because the earlier `openai/gpt-oss-120b` model had reached its free-tier rolling token quota. The classifier prompt and detector were not tuned on these comments. `docs/EVALUATION.md` contains the generated counts, the observed false positive, and the model-comparison caveat. This audit covers individual comments; it does not measure the production same-source combined screen.
+
+## Phase 8
+
+GitHub Actions installs the package, caches pip and the two pinned public model weight sets, then runs Ruff, mypy, pytest, and the recorded evaluation with `LLM_PROVIDER=mock`. The evaluation step forces local-only model loading and enforces the pass-rate threshold from `evals/config.json`. It uploads the generated Markdown and JSON reports as an artifact. No hosted-provider secret is supplied to CI. The workflow has not run on GitHub in this checkout, so its committed CI badge says it awaits the first push. The evaluation badge is generated from the actual local `latest.json`; CI regenerates both badges in its artifact after a run. Once a remote exists, the README can use GitHub's native status badge.
+
+`make demo` uses a recorded synthetic issue and planted instruction-override comment with the real agent graph, a fixture gateway, and the mock provider. It verifies that a quarantine happened, returns a cited answer, and writes JSONL and self-contained HTML traces under ignored `traces/`. The README screenshot is from a separate recorded mock Click run using the same viewer. `evals/publish_readme_results.py` replaces only the marked README tables from generated JSON reports, so published headline numbers can be traced back to case-level outputs. The live attack and classifier reports are separate from CI and explicitly labeled by provider.

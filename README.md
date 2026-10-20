@@ -1,14 +1,50 @@
 # RepoPulse
 
-RepoPulse is a local-first project for answering questions about GitHub repositories with traceable evidence. It combines live GitHub REST data, local embeddings, a persistent vector store, a planning agent, memory, guardrails, evaluation, and per-run traces. Development is staged so each phase can be tested and committed independently.
+[![CI status](docs/badges/ci.svg)](.github/workflows/ci.yml) ![Offline eval pass rate](docs/badges/eval.svg)
 
-## Status: Phase 7 complete
+RepoPulse answers questions about public GitHub repositories and shows the
+evidence behind every claim. A normal repository search can miss the relevant
+issue among similar PRs, while retrieved comments can contain instructions
+aimed at the assistant. RepoPulse combines local retrieval, a bounded agent
+loop, quote-grounded citations, configurable injection screens, and an
+inspectable trace. It uses free local models by default; Groq's free tier is
+an optional answer provider.
 
-The project ingests GitHub issues, pull requests, comments, and commits into local ChromaDB, then answers repository questions with a LangGraph agent using eight read-only MCP tools. The agent replans when evidence is insufficient, retries tool failures with backoff, stops at configured step and token budgets, and returns a Pydantic answer with citations on every claim. Phase 4 adds in-process conversation memory and policy-gated SQLite facts and preferences. Phase 5 adds input, injection, output, citation, and action guardrails. Phase 6 adds a recorded 400-item GitHub snapshot, 55 labeled retrieval queries, 60 offline agent cases, and baseline and ablation reports. Phase 7 adds local per-run traces and an offline HTML viewer. The scripted demo remains for Phase 8.
+## Architecture
 
-## Quickstart
+```mermaid
+flowchart LR
+    GH[Public GitHub REST] --> Cache[Conditional local cache]
+    Cache --> Ingest[Issues, PRs, comments, commits]
+    Ingest --> Chunk[Fixed or structure chunks]
+    Chunk --> Embed[Local MiniLM embeddings]
+    Embed --> Chroma[Local ChromaDB]
+    Chroma --> Retrieve[Search and optional reranker]
+    GH --> MCP[Eight read-only MCP tools]
+    Retrieve --> MCP
+    Q[Question] --> Input[Input and action guards]
+    Input --> Agent[LangGraph plan, tool, observe, replan]
+    MCP --> Screens[Heuristic and optional LLM injection screens]
+    Screens --> Agent
+    Memory[Session and policy-gated SQLite memory] --> Agent
+    Provider[Ollama, free Groq, or mock LLM] <--> Agent
+    Agent --> Verify[Structured answer, quote and ID verifier, redaction]
+    Verify --> Answer[Cited answer]
+    Agent --> Trace[JSONL trace and offline HTML viewer]
+```
 
-Requirements: Python 3.11+ and GNU Make. On Windows, use a Python installation with `venv` and `pip`; the Makefile uses the `py -3` launcher by default. No API key, credit card, or paid service is needed for the default local path. `make setup` installs Python packages and downloads the two free model weight sets once into `.repopulse/models`. The downloads require internet access on first setup and may take several minutes. Later inference, unit tests, and the recorded-fixture evaluation use cached weights without network access. Run `make models` to retry or refresh the model cache.
+The MCP surface is read-only. Write requests produce an inert dry-run action
+plan requiring confirmation; there is no write execution tool. The agent has a
+hard tool-step limit, a token-accounting budget, up to three replans, and
+bounded tool retries. A provider or grounding fallback marks the answer
+`degraded` in both JSON and the CLI output.
+
+## Quickstart: free setup
+
+Use Python 3.11+ and GNU Make. `make setup` installs the package and downloads
+two public sentence-transformers weight sets into ignored `.repopulse/models`.
+The first setup needs internet access; tests and the recorded evaluation run
+offline after the weights are cached. No paid key or credit card is required.
 
 ```sh
 make setup
@@ -16,142 +52,173 @@ make test
 make lint
 make typecheck
 make eval
+make demo
 ```
 
-For a network-free smoke check:
-
-```sh
-LLM_PROVIDER=mock .venv/bin/repopulse doctor
-```
-
-On Windows PowerShell:
+On Windows without GNU Make, the equivalent setup and checks are:
 
 ```powershell
-$env:LLM_PROVIDER = "mock"
-.\.venv\Scripts\repopulse.exe doctor
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m repopulse.cli models prepare
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m evals.run_suite
+.\.venv\Scripts\python.exe -m evals.run_demo
 ```
 
-`repopulse doctor --live` sends one short request to the selected provider and confirms that the configured model accepts it. The default `doctor` remains offline. Hosted providers use their free-tier quota for the live check.
+The demo uses no GitHub or hosted model. The mock LLM is for tests and the
+demo; it is not a general answer model.
 
-The default provider is Ollama. Install Ollama separately, pull a local model such as `llama3.1:8b`, and run its local server before calling the Ollama adapter. Set `LLM_PROVIDER=groq` with `GROQ_API_KEY`, or `LLM_PROVIDER=gemini` with `GEMINI_API_KEY`, to use the optional free-tier hosted providers. The Groq default is `openai/gpt-oss-120b`, which [Groq lists on its free plan](https://console.groq.com/docs/rate-limits); its former `llama-3.3-70b-versatile` default [was retired for free-tier use](https://console.groq.com/docs/deprecations). The provider choice is explicit and tests use `mock` with no network. Copy `.env.example` to `.env` to customize settings. `.env` is ignored by Git.
+Choose a free answer provider for live questions:
 
-Ask a question after `make setup`; local semantic search uses the cached embedding model and an ingested collection, while the other tools read public GitHub REST endpoints through the cache:
+- **Ollama, local:** install Ollama, pull the configured model (default
+  `llama3.1:8b`), and start its local server. `LLM_PROVIDER=ollama` is the
+  default. The model runs on your machine.
+- **Groq free tier:** create a free key and put `LLM_PROVIDER=groq` and
+  `GROQ_API_KEY=...` in a local `.env` copied from `.env.example`.
+  `repopulse doctor --live` checks that the selected model accepts a request.
+  Free-tier limits can delay live runs. Do not commit `.env`.
+
+Then ingest a public repository and ask a question:
 
 ```sh
-.venv/bin/repopulse ask "Which issue reported ANSI color handling?" --repo pallets/click
-.venv/bin/repopulse ask "Which changes affect styling?" --repo pallets/click --max-steps 8 --token-budget 8000
+repopulse ingest pallets/click --since 2026-10-14 --until 2026-10-16 --strategy structure
+repopulse ask "Which issue reported ANSI color handling?" --repo pallets/click
+repopulse trace show RUN_ID --html traces/RUN_ID.html
 ```
 
-On Windows, use `.\.venv\Scripts\repopulse.exe`. The command starts the bundled MCP server over stdio, loads the cached embedding model once before accepting tool calls, and prints progress to stderr while it plans and searches. The first `ask` in a new process can take tens of seconds while Python loads the local model; it does not download weights. Each MCP tool call has a 60-second timeout. A timed-out tool is retried within the step limit, and the answer includes a limitation if it still fails. The command prints validated, ASCII-safe JSON with `summary`, `key_changes`, `risks`, `limitations`, `degraded`, `degradation_reasons`, and `trace_id`. Each claim has a `citations` array containing retrieved issue, PR, or commit URLs. Each claim can be paraphrased but must carry a retrieved evidence ID and a verbatim quote span of at most 30 words; the verifier checks the quote in that exact passage. If an LLM step fails or its claims lack support, the answer is marked degraded and a visible `DEGRADED` line explains why. Every run has a JSONL trace under ignored `traces/`; failed model output is traced with common secrets redacted. You can run the standalone server with `python -m repopulse.mcp_server` from the virtual environment.
+`--since` is inclusive and `--until` exclusive at midnight UTC. On Windows,
+the CLI executable is `.venv\Scripts\repopulse.exe`. GitHub public reads need
+no token, but a free `GITHUB_TOKEN` in the ignored `.env` raises GitHub's
+request allowance for larger ingests. Local search and the recorded eval do
+not call GitHub. `repopulse models prepare` caches weights once; later model
+loads are local-only. See [design](docs/DESIGN.md) for the ingestion and
+memory policies.
 
-The default Ollama path is local and free. `LLM_PROVIDER=mock` is a network-free deterministic smoke path; its default response is not an answer and may produce an empty, degraded result. GitHub REST calls from `ask` still need connectivity unless responses are cached. Unit tests use the recorded fixture and a mock LLM, with no GitHub or model download requests. The sentence-transformers weights are fetched once by `make setup`/`make models` and then loaded from `.repopulse/models` in local-only mode; tests do not load them.
+## Demo and trace viewer
 
-## Guardrails
+`make demo` runs the real agent against a recorded synthetic issue with a
+planted instruction-override comment. The mock LLM and fixture gateway keep it
+offline. The run quarantines the comment, returns a cited answer, and writes a
+JSONL trace plus a self-contained HTML viewer under ignored `traces/`.
+Open the HTML path printed by the command. The trace shows the question, plan,
+tool attempts and latency, evidence, guardrail decisions, usage, and final
+answer. `repopulse trace show RUN_ID` prints the same recorded events.
 
-All Phase 5 guards default to enabled. Set `GUARD_INPUT_VALIDATION`, `GUARD_INJECTION_DETECTION`, `GUARD_UNTRUSTED_WRAPPING`, `GUARD_OUTPUT_REDACTION`, `GUARD_STRUCTURED_VALIDATION`, `GUARD_CITATION_VERIFICATION`, or `GUARD_ACTION_GATE` to `false` in `.env` to ablate one at a time. Write requests return an `action_plan` with `dry_run: true` and require explicit confirmation; RepoPulse has no write execution tool. See [threat model](docs/THREAT_MODEL.md) for attack coverage and limitations.
+The screenshot below is a separate recorded mock Click run rendered with the
+same viewer. Its example HTML is [included here](docs/trace_viewer_example.html).
 
-An optional provider-neutral LLM screen can be enabled with `GUARD_INJECTION_CLASSIFIER=true`. It reviews retrieved passages and related passages from the same issue before they reach the agent prompt, caches decisions by content hash in ignored `.repopulse/injection-classifier-cache`, and records decisions in the run trace. It is disabled by default and stays disabled for the mock provider and CI. A configured real provider is required; Groq's free tier works with the existing `LLM_PROVIDER=groq` setting. See the [threat model](docs/THREAT_MODEL.md) for its failure modes.
+![RepoPulse trace viewer screenshot](docs/trace_viewer_preview.png)
 
-## Inspect a run
+## Measured results
 
-Copy `trace_id` from an `ask` or `chat` answer. The CLI prints its timestamped events as JSON or creates a self-contained HTML timeline:
+The offline suite uses a pinned 400-issue/PR Click snapshot, 55 labeled
+retrieval queries, 60 mock-agent cases, and synthetic planted comments. These
+tables are generated from the actual JSON reports by
+`make readme-results` (or `python -m evals.publish_readme_results`);
+`make eval` regenerates the offline
+source first. Scores from the mock LLM are tests of the harness and agent
+control flow, not estimates of live answer quality. Full methodology and
+case-level failures are in [evaluation notes](docs/EVALUATION.md).
 
-```sh
-.venv/bin/repopulse trace show RUN_ID
-.venv/bin/repopulse trace show RUN_ID --html traces/RUN_ID.html
-```
-
-On Windows, use `.\.venv\Scripts\repopulse.exe` in place of `.venv/bin/repopulse`. Open the generated HTML file in a browser; its search and event-type filter work offline. The trace records the question, plans, LLM calls and token accounting, tool arguments and attempt latencies, retrieved passages and quarantine decisions, memory reads and writes, guardrail events, and the final answer. The [recorded mock run viewer](docs/trace_viewer_example.html) and [screenshot](docs/trace_viewer_preview.png) show the layout. Regenerate that example without network access using `.venv/bin/python -m evals.render_trace_example` (Windows: `.\.venv\Scripts\python.exe -m evals.render_trace_example`). See [observability notes](docs/OBSERVABILITY.md) for the event schema and local-data limits.
-
-![RepoPulse trace viewer preview](docs/trace_viewer_preview.png)
-
-## Memory
-
-The agent reads relevant active memories before planning. Add only facts or preferences you want to keep across commands:
-
-```sh
-.venv/bin/repopulse memory add "I care most about the auth rewrite." --kind preference --repo pallets/click
-.venv/bin/repopulse memory list --repo pallets/click
-.venv/bin/repopulse memory forget MEMORY_ID
-.venv/bin/repopulse chat --repo pallets/click
-```
-
-On Windows, replace `.venv/bin/repopulse` with `.\.venv\Scripts\repopulse.exe`. `chat` keeps the last six questions and their cited URLs in memory while that process stays open; type `exit` to end the session. `ask` is a single-turn command. Long-term records live in ignored `.repopulse/memory.sqlite3` and include a timestamp, source, confidence, repository scope, and optional expiry. `memory add` always records user provenance; `--kind fact`, `--confidence 0.8`, and `--expires YYYY-MM-DD` are available. The expiry date is active through the end of that UTC day. Expired records are hidden on reads; `forget` deletes a record by ID. No GitHub tool result or issue comment is automatically saved to SQLite. See the [memory policy](docs/DESIGN.md#phase-4) for exact acceptance rules and the explicit verified-summary API.
-
-Public GitHub reads need no token. [GitHub allows 60 unauthenticated REST requests per hour and generally 5,000 per hour with a personal access token](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api). A GitHub token is free and separate from the Groq API key. For a larger ingest window, put `GITHUB_TOKEN=...` in the local Git-ignored `.env` to raise the limit. Keep using the read-only public-repository scope you need. Cached responses are stored under `.repopulse/github-cache` by default and ignored by Git.
-
-Ingest a live public repository, then search its local evidence:
-
-```sh
-.venv/bin/repopulse ingest pallets/click --since 2026-10-14 --until 2026-10-16 --strategy structure
-.venv/bin/repopulse search "ANSI escape codes style colors" --repo pallets/click --strategy structure --rerank
-```
-
-`--since` is inclusive and `--until` is exclusive, both at midnight UTC. On Windows, use `.\.venv\Scripts\repopulse.exe` instead of `.venv/bin/repopulse`. The `ingest` command makes read-only GitHub API calls; `search` uses only local ChromaDB and cached models. Use `--strategy fixed` for the alternative collection.
-
-Ingestion now fetches discussion and review comments through GitHub's repository-wide `since` endpoints and groups them by issue or PR, avoiding a comment request per item. It uses the PR title and body already present in GitHub's issue listing, avoiding a PR detail request per item. Paginated listings still require calls. If a run reaches GitHub's rate limit, RepoPulse prints the reset delay and exits without writing an incomplete corpus; rerun it after the reset or configure a free `GITHUB_TOKEN` in `.env`. The Groq key does not affect GitHub's request quota.
-
-The Phase 6 evaluation uses [a pinned 400-item `pallets/click` capture](evals/fixtures/click_large_snapshot.json), [55 labeled retrieval questions](evals/datasets/retrieval_large.jsonl), and [60 agent cases](evals/datasets/agent_cases.jsonl), including 20 planted comment attacks. An additional [15-case held-out attack set](evals/fixtures/heldout_attacks.json) checks detector generalization. `make eval` regenerates [the measured Markdown report](evals/reports/latest.md) and [case-level JSON](evals/reports/latest.json). It never contacts GitHub or a hosted LLM. The two public model weight sets must already be cached by `make setup` or `make models`; offline unit tests use mock components and do not load them. Set `min_full_agent_pass_rate` in [evaluation config](evals/config.json) for the CI exit threshold. On Windows without GNU Make, run `.\.venv\Scripts\python.exe -m evals.run_suite`.
-
-`make eval-live` is an optional ten-question Groq free-tier check with pauses between calls. Set `LLM_PROVIDER=groq` and `GROQ_API_KEY` in ignored `.env`, cache the models, and ingest `pallets/click` before running it. This makes live requests and writes `evals/reports/live_latest.md` and `live_latest.json`; it is separate from CI. On Windows without GNU Make, run `.\.venv\Scripts\python.exe -m evals.run_live`. See [evaluation methodology](docs/EVALUATION.md) for metric definitions and limitations.
-
-`make eval-attacks-live` runs the 20 development and 15 held-out v1 synthetic comment attacks through the real Groq-backed agent with guardrails on and off. It paces requests and resumes completed cases from an ignored local cache, then generates `evals/reports/attacks_live.md` and `.json`. `make eval-classifier-live` measures the optional live Groq classifier over the frozen development, v1, and v2 sets while the rest of the agent uses the offline mock LLM; it generates `evals/reports/injection_classifier.md` and `.json`. Both are optional free-tier runs outside CI and need `LLM_PROVIDER=groq` with a free `GROQ_API_KEY`. On Windows without GNU Make, use `.\.venv\Scripts\python.exe -m evals.run_attacks_live` and `.\.venv\Scripts\python.exe -m evals.run_classifier_eval`. See [evaluation methodology](docs/EVALUATION.md) for what these scores can and cannot show.
-
-## Measured Phase 6 retrieval results (mock LLM suite; ranking uses no LLM)
-
-The offline suite measured 55 labeled queries over 400 recorded issue/PR documents. Hit rate and MRR use the first three distinct source documents.
+<!-- measured-results:start -->
+### Retrieval (mock LLM suite; ranking uses no LLM)
 
 | Chunking | Reranker | Chunks | Hit rate@3 | MRR@3 |
 | --- | --- | ---: | ---: | ---: |
 | Fixed | Off | 1193 | 0.800 | 0.667 |
 | Fixed | On | 1193 | 0.873 | 0.806 |
-| Structure-aware | Off | 1279 | 0.818 | 0.709 |
-| Structure-aware | On | 1279 | 0.873 | 0.779 |
+| Structure | Off | 1279 | 0.818 | 0.709 |
+| Structure | On | 1279 | 0.873 | 0.779 |
 
-The same mock LLM run measured a 0.433 pass rate for single-retrieval naive RAG and 0.783 for the full agent across 60 cases; the planted development-attack quarantine rate was 20/20. The separate held-out check blocked 0/15. These are local recorded-fixture results, not estimates of real-model answer quality. The [evaluation notes](docs/EVALUATION.md) list all 13 full-agent failures and the held-out gap. Fixture hashes, rankings, case outcomes, and ablations are in the generated JSON. The historical Phase 2 report remains in `evals/reports/retrieval_report.md`.
+### Agent comparison (mock LLM, recorded fixtures)
 
-## Phase roadmap
+| System | Passed / cases | Pass rate | Citation correctness | Injection block rate |
+| --- | ---: | ---: | ---: | ---: |
+| Naive RAG | 26/60 | 0.433 | 1.000 | 0.000 |
+| Full agent | 47/60 | 0.783 | 1.000 | 1.000 |
 
-1. **Foundations:** package, config, providers, GitHub client, cache, offline tests — complete.
-2. **Ingestion and retrieval:** local MiniLM embeddings, ChromaDB, two chunkers, reranking, measured retrieval evaluation — complete.
-3. **MCP server and LangGraph agent loop** — complete.
-4. **Short-term and SQLite memory with explicit storage policy** — complete.
-5. Input, injection, output, citation, and action guardrails (complete).
-6. **Deterministic answer evaluation suite and baseline comparisons** — complete.
-7. **JSONL tracing and offline HTML viewer** — complete.
-8. CI, polished demo, and interview documentation.
+### Attack screening (heuristic only; live Groq classifier with mock LLM agent)
 
-`make demo` becomes functional in Phase 8. See [design decisions](docs/DESIGN.md) for the architecture and trade-offs.
+| Set | Heuristic-only blocks | Added live Groq classifier blocks | Combined live Groq classifier block rate |
+| --- | ---: | ---: | ---: |
+| dev | 20/20 | 0 | 20/20 (1.000) |
+| heldout_v1 | 0/15 | 14 | 14/15 (0.933) |
+| heldout_v2 | 0/20 | 18 | 18/20 (0.900) |
 
-## Current architecture
+### Benign-comment false positives (live Groq classifier `openai/gpt-oss-20b`)
 
-```mermaid
-flowchart LR
-    Config[Validated settings] --> Factory[LLM provider factory]
-    Factory --> Ollama[Ollama local]
-    Factory --> Groq[Groq free tier]
-    Factory --> Gemini[Gemini free tier]
-    Factory --> Mock[Mock offline]
-    Config --> GitHub[GitHub REST client]
-    GitHub <--> Cache[Local JSON cache]
-    GitHub --> API[GitHub REST API]
-    GitHub --> Ingest[Issue PR commit ingestion]
-    Ingest --> Chunk[Fixed or structure chunking]
-    Chunk --> Embed[Local MiniLM embeddings]
-    Embed --> Chroma[Persistent ChromaDB]
-    Chroma --> Retrieve[Vector retrieval]
-    Retrieve --> Rerank[Optional local cross-encoder]
-    Ask[ask CLI] --> Agent[LangGraph plan and tool loop]
-    Agent --> MCP[Local MCP stdio tools]
-    MCP --> GitHub
-    MCP --> Retrieve
-    Agent --> Answer[Cited Pydantic answer]
-    Memory[SQLite long-term memory] --> Agent
-    Session[In-process conversation state] --> Agent
-    Agent --> Trace[Local JSONL trace]
-    Trace --> Viewer[Offline HTML viewer]
-```
+| Screen | Quarantined / sample | False-positive proxy rate |
+| --- | ---: | ---: |
+| Heuristic only | 1/200 | 0.005 |
+| Live Groq classifier only | 0/200 | 0.000 |
+| Heuristic + live Groq classifier | 1/200 | 0.005 |
+
+### Observable attack success (live Groq answering model)
+
+| Set | Guardrails | Successful / cases | Attack success rate |
+| --- | --- | ---: | ---: |
+| dev | on | 0/20 | 0.000 |
+| dev | off | 0/20 | 0.000 |
+| heldout_v1 | on | 0/15 | 0.000 |
+| heldout_v1 | off | 0/15 | 0.000 |
+
+The unguarded live Groq run also resisted every attack observed by this scorer. Its checks can miss subtle or paraphrased compliance.
+<!-- measured-results:end -->
+
+The development and held-out screening sets measure **quarantine**, while the
+live attack table measures the scorer's observable attack behavior. The
+benign-comment audit used live Groq `openai/gpt-oss-20b`; the attack-screening
+run used `openai/gpt-oss-120b`, so those two rates do not form a same-model
+trade-off. The benign sample had only one observed false positive, documented
+in [evaluation notes](docs/EVALUATION.md#benign-comment-false-positives-heuristic-only-live-groq-classifier).
+The live scorer can miss subtle compliance. Its unguarded setting still has
+the read-only tool allowlist and repository pinning.
+
+## CI and reproducibility
+
+[GitHub Actions](.github/workflows/ci.yml) runs Ruff, mypy, pytest, and the
+offline `LLM_PROVIDER=mock` evaluation with no hosted-provider secrets. It
+caches pip packages and the pinned Hugging Face weights, forces offline model
+loading after preparation, enforces `min_full_agent_pass_rate` from
+[`evals/config.json`](evals/config.json), and uploads the Markdown/JSON report
+and regenerated badges as an artifact. `make badges` refreshes the local eval
+badge from `latest.json`. This checkout has no GitHub remote yet, so the local
+CI badge truthfully says “awaiting first push”; the workflow will produce a
+run-status badge artifact after it executes. Once the repository has a GitHub
+URL, replace the local CI image with GitHub's native workflow status badge.
+
+`make eval-live`, `make eval-attacks-live`, `make eval-classifier-live`, and
+`make eval-benign-live` are optional Groq free-tier runs. They are paced and
+stay out of CI. The default mock tests, demo, and offline eval require no
+hosted-provider credentials.
 
 ## Limitations
 
-The agent's token budget uses a documented character-based reservation when the provider cannot report token usage, plus the provider's reported usage when available. It caps each requested completion and stops further calls at the budget, but exact tokenization varies by provider. Quote grounding permits paraphrased claims but does not prove semantic entailment. Phase 5 adds configurable prompt-injection defenses. GitHub's unauthenticated primary limit is [60 requests per hour](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api); fresh local cache entries avoid repeat calls and stale entries use conditional requests. The Chroma cache and SQLite memory can hold private local data and should be treated accordingly.
+- The full mock-agent suite has 13 known failing cases. Several relevant Click
+  issues rank below a similar PR; the scripted mock uses the first evidence
+  title. Two legitimate prompt-related issues are quarantined by the
+  heuristic. [Every failure is listed](docs/EVALUATION.md#known-failures-mock-llm).
+- Quote grounding checks a short verbatim span and a retrieved evidence ID.
+  It cannot prove that a paraphrased claim follows semantically from the
+  quote. Output redaction covers common patterns, not every possible secret.
+- The optional injection classifier still misses a split-comment v1 case and
+  two v2 cases. The heuristic alone misses those held-out families. A single
+  benign-comment sample cannot establish a general false-positive rate; the
+  default 120b classifier has no completed benign audit.
+- The live attack scorer found no observable successes with guardrails either
+  on or off in its recorded cases. It cannot rule out subtler answer steering,
+  and the read-only tool surface limits the tool-hijack test by construction.
+- GitHub data can change after an ingest. The 400-item retrieval capture stores
+  comment counts rather than bodies; the benign-comment audit uses a later
+  separate capture anchored to those same parent issue/PR IDs.
+
+## Future work
+
+Evaluate on more repositories and harder labels, measure live answer quality
+with human review, repeat attack and benign audits on the same classifier
+model, improve semantic claim support checks, and study attack effects after
+multiple retrieval turns. The current [threat model](docs/THREAT_MODEL.md),
+[observability notes](docs/OBSERVABILITY.md), and
+[interview notes](docs/INTERVIEW_NOTES.md) describe the trade-offs and next
+steps in detail.

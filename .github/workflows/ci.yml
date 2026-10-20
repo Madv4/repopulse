@@ -48,8 +48,15 @@ jobs:
           TRANSFORMERS_OFFLINE: "1"
         run: python -m evals.run_suite
       - name: Generate badges from completed report
-        if: success()
-        run: python -m evals.generate_badges --ci-status passing
+        if: always()
+        run: |
+          if [ -f evals/reports/latest.json ]; then
+            if [ "${{ job.status }}" = "success" ]; then
+              python -m evals.generate_badges --ci-status passing
+            else
+              python -m evals.generate_badges --ci-status failing
+            fi
+          fi
       - name: Upload evaluation report and badges
         if: always()
         uses: actions/upload-artifact@v4

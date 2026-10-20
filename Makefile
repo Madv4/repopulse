@@ -6,7 +6,7 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 endif
 
-.PHONY: setup models test lint typecheck eval eval-live eval-attacks-live eval-classifier-live eval-benign-live badges demo
+.PHONY: setup models test lint typecheck eval eval-live eval-attacks-live eval-classifier-live eval-benign-live badges readme-results demo
 
 setup:
 	$(PYTHON) -m venv .venv
@@ -43,6 +43,9 @@ eval-benign-live:
 
 badges:
 	$(VENV_PYTHON) -m evals.generate_badges
+
+readme-results:
+	$(VENV_PYTHON) -m evals.publish_readme_results
 
 demo:
 	$(VENV_PYTHON) -m evals.run_demo
