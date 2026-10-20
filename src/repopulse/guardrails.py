@@ -12,6 +12,7 @@ class Guardrails(BaseModel):
 
     input_validation: bool = True
     injection_detection: bool = True
+    injection_classifier: bool = False
     untrusted_wrapping: bool = True
     output_redaction: bool = True
     structured_validation: bool = True

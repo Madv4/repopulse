@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from repopulse.agent.citations import quote_in_evidence
 from repopulse.github.client import GitHubClient
+from repopulse.guardrail_classifier import Classification, InjectionClassifier
 from repopulse.guardrails import (
     ActionPlan,
     Guardrails,
@@ -158,6 +159,7 @@ class RepoPulseAgent:
         session_memory: SessionMemory | None = None,
         long_term_memory: MemoryStore | None = None,
         guardrails: Guardrails | None = None,
+        injection_classifier: InjectionClassifier | None = None,
     ) -> None:
         if max_steps < 1 or token_budget < 1 or max_replans < 0:
             raise ValueError("agent limits must be positive (max_replans may be zero)")
@@ -172,6 +174,7 @@ class RepoPulseAgent:
         self.session_memory = session_memory or SessionMemory()
         self.long_term_memory = long_term_memory
         self.guardrails = guardrails or Guardrails()
+        self.injection_classifier = injection_classifier
         graph = StateGraph(AgentState)
         graph.add_node("plan", self._plan)
         graph.add_node("select", self._select)
@@ -506,6 +509,52 @@ class RepoPulseAgent:
     def _after_select(state: AgentState) -> str:
         return "execute" if state["selected"] is not None else "synthesize"
 
+    async def _classify_evidence(
+        self, state: AgentState, item: Evidence, *, group: bool = False
+    ) -> Classification | None:
+        """Apply the optional semantic gate without hiding provider failures."""
+        classifier = self.injection_classifier
+        if classifier is None or not self.guardrails.injection_classifier:
+            return None
+        if state["tokens_used"] + classifier.estimate_units(item) > self.token_budget:
+            self._degrade(state, "Injection classifier skipped because the token budget was low.")
+            if self.trace is not None:
+                self.trace.record(
+                    "guardrail", guard="injection_classifier", decision="budget_skipped",
+                    evidence_id=item.evidence_id, group=group,
+                )
+            return None
+        try:
+            result = await asyncio.to_thread(classifier.classify, item)
+        except Exception as exc:
+            self._degrade(state, "Injection classifier unavailable; heuristic-only filtering used.")
+            if self.trace is not None:
+                self.trace.record(
+                    "guardrail", guard="injection_classifier", decision="error",
+                    evidence_id=item.evidence_id, group=group,
+                    error_type=type(exc).__name__,
+                )
+            return None
+        state["tokens_used"] += result.budget_units_used
+        state["provider_prompt_tokens"] += result.provider_prompt_tokens
+        state["provider_completion_tokens"] += result.provider_completion_tokens
+        if self.trace is not None:
+            self.trace.record(
+                "llm_call", stage="injection_classifier", provider=classifier.provider.name,
+                model=classifier.model, status="cache_hit" if result.cache_hit else "ok",
+                latency_ms=result.latency_ms,
+                budget_units_used=result.budget_units_used,
+                provider_prompt_tokens=result.provider_prompt_tokens,
+                provider_completion_tokens=result.provider_completion_tokens,
+            )
+            self.trace.record(
+                "guardrail", guard="injection_classifier",
+                decision="quarantined" if result.suspicious else "accepted",
+                evidence_id=item.evidence_id, chunk_hash=result.chunk_hash,
+                reason=result.reason, group=group, cache_hit=result.cache_hit,
+            )
+        return result
+
     async def _execute(self, state: AgentState) -> AgentState:
         choice = state["selected"]
         if choice is None:
@@ -542,6 +591,7 @@ class RepoPulseAgent:
                         },
                     )
                 known = {(item.kind, item.url, item.excerpt) for item in state["evidence"]}
+                candidates: list[Evidence] = []
                 for item in result.evidence:
                     if (item.kind, item.url, item.excerpt) in known:
                         self._trace_evidence(item, choice.tool, "duplicate")
@@ -556,6 +606,51 @@ class RepoPulseAgent:
                                 f"Suspicious retrieved passage {item.evidence_id} was quarantined."
                             )
                             continue
+                    candidates.append(item)
+                if self.injection_classifier is not None and self.guardrails.injection_classifier:
+                    reviewed: list[Evidence] = []
+                    for item in candidates:
+                        verdict = await self._classify_evidence(state, item)
+                        if verdict is not None and verdict.suspicious:
+                            if self.trace is not None:
+                                self.trace.quarantine(item.evidence_id, ["llm_classifier"])
+                            self._trace_evidence(item, choice.tool, "quarantined")
+                            state["limitations"].append(
+                                f"Suspicious retrieved passage {item.evidence_id} was quarantined."
+                            )
+                            continue
+                        reviewed.append(item)
+                    # Review related passages together so split comments cannot rely only
+                    # on each fragment appearing harmless in isolation.
+                    groups: dict[str, list[Evidence]] = {}
+                    for item in reviewed:
+                        groups.setdefault(item.url, []).append(item)
+                    blocked: set[str] = set()
+                    for members in groups.values():
+                        if len(members) < 2:
+                            continue
+                        combined = Evidence(
+                            url=members[0].url, kind=members[0].kind,
+                            title="Related retrieved discussion passages",
+                            excerpt="\n\n".join(
+                                f"{part.title}\n{part.excerpt}" for part in members
+                            )[:1800],
+                        )
+                        verdict = await self._classify_evidence(state, combined, group=True)
+                        if verdict is not None and verdict.suspicious:
+                            for item in members:
+                                blocked.add(item.evidence_id)
+                                if self.trace is not None:
+                                    self.trace.quarantine(
+                                        item.evidence_id, ["llm_classifier_group"]
+                                    )
+                                self._trace_evidence(item, choice.tool, "quarantined")
+                                state["limitations"].append(
+                                    f"Suspicious retrieved passage {item.evidence_id} "
+                                    "was quarantined."
+                                )
+                    candidates = [item for item in reviewed if item.evidence_id not in blocked]
+                for item in candidates:
                     state["evidence"].append(item)
                     self._trace_evidence(item, choice.tool, "accepted")
                 break

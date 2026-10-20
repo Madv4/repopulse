@@ -15,6 +15,7 @@ from repopulse.agent import Answer, RepoPulseAgent
 from repopulse.config import Settings
 from repopulse.github.client import GitHubClient
 from repopulse.github.models import GitHubRateLimitError
+from repopulse.guardrail_classifier import InjectionClassifier
 from repopulse.guardrails import Guardrails
 from repopulse.ingestion.chunking import FixedChunker, StructureChunker
 from repopulse.ingestion.embed import LocalEmbedder
@@ -49,6 +50,9 @@ def _guardrails(settings: Settings) -> Guardrails:
     return Guardrails(
         input_validation=settings.guard_input_validation,
         injection_detection=settings.guard_injection_detection,
+        injection_classifier=(
+            settings.guard_injection_classifier and settings.llm_provider != "mock"
+        ),
         untrusted_wrapping=settings.guard_untrusted_wrapping,
         output_redaction=settings.guard_output_redaction,
         structured_validation=settings.guard_structured_validation,
@@ -71,8 +75,13 @@ async def _ask(
         await session.initialize()
         print("Planning the answer...", file=sys.stderr, flush=True)
         trace = TraceWriter(Path("traces"))
+        provider = create_provider(settings)
+        classifier = (
+            InjectionClassifier(provider, settings.injection_classifier_cache_dir)
+            if settings.guard_injection_classifier and provider.name != "mock" else None
+        )
         agent = RepoPulseAgent(
-            create_provider(settings),
+            provider,
             MCPGateway(session),
             max_steps=max_steps,
             token_budget=token_budget,
@@ -80,6 +89,7 @@ async def _ask(
             trace=trace,
             long_term_memory=MemoryStore(settings.memory_db_path),
             guardrails=_guardrails(settings),
+            injection_classifier=classifier,
         )
         answer = await agent.ask(question, repo)
         _show_answer(answer, trace)
@@ -96,6 +106,10 @@ async def _chat(repo: str, settings: Settings, max_steps: int, token_budget: int
         session_memory = SessionMemory()
         long_term_memory = MemoryStore(settings.memory_db_path)
         provider = create_provider(settings)
+        classifier = (
+            InjectionClassifier(provider, settings.injection_classifier_cache_dir)
+            if settings.guard_injection_classifier and provider.name != "mock" else None
+        )
         print("Enter questions; type exit to finish.", file=sys.stderr, flush=True)
         while True:
             try:
@@ -117,6 +131,7 @@ async def _chat(repo: str, settings: Settings, max_steps: int, token_budget: int
                 session_memory=session_memory,
                 long_term_memory=long_term_memory,
                 guardrails=_guardrails(settings),
+                injection_classifier=classifier,
             )
             _show_answer(await agent.ask(question, repo), trace)
 

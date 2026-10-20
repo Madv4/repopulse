@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     reranker_revision: str = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
     guard_input_validation: bool = True
     guard_injection_detection: bool = True
+    guard_injection_classifier: bool = False
+    injection_classifier_cache_dir: Path = Path(".repopulse/injection-classifier-cache")
     guard_untrusted_wrapping: bool = True
     guard_output_redaction: bool = True
     guard_structured_validation: bool = True

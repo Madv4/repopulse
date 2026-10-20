@@ -50,6 +50,8 @@ The default Ollama path is local and free. `LLM_PROVIDER=mock` is a network-free
 
 All Phase 5 guards default to enabled. Set `GUARD_INPUT_VALIDATION`, `GUARD_INJECTION_DETECTION`, `GUARD_UNTRUSTED_WRAPPING`, `GUARD_OUTPUT_REDACTION`, `GUARD_STRUCTURED_VALIDATION`, `GUARD_CITATION_VERIFICATION`, or `GUARD_ACTION_GATE` to `false` in `.env` to ablate one at a time. Write requests return an `action_plan` with `dry_run: true` and require explicit confirmation; RepoPulse has no write execution tool. See [threat model](docs/THREAT_MODEL.md) for attack coverage and limitations.
 
+An optional provider-neutral LLM screen can be enabled with `GUARD_INJECTION_CLASSIFIER=true`. It reviews retrieved passages and related passages from the same issue before they reach the agent prompt, caches decisions by content hash in ignored `.repopulse/injection-classifier-cache`, and records decisions in the run trace. It is disabled by default and stays disabled for the mock provider and CI. A configured real provider is required; Groq's free tier works with the existing `LLM_PROVIDER=groq` setting. See the [threat model](docs/THREAT_MODEL.md) for its failure modes.
+
 ## Inspect a run
 
 Copy `trace_id` from an `ask` or `chat` answer. The CLI prints its timestamped events as JSON or creates a self-contained HTML timeline:
