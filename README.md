@@ -95,6 +95,8 @@ The Phase 6 evaluation uses [a pinned 400-item `pallets/click` capture](evals/fi
 
 `make eval-live` is an optional ten-question Groq free-tier check with pauses between calls. Set `LLM_PROVIDER=groq` and `GROQ_API_KEY` in ignored `.env`, cache the models, and ingest `pallets/click` before running it. This makes live requests and writes `evals/reports/live_latest.md` and `live_latest.json`; it is separate from CI. On Windows without GNU Make, run `.\.venv\Scripts\python.exe -m evals.run_live`. See [evaluation methodology](docs/EVALUATION.md) for metric definitions and limitations.
 
+`make eval-attacks-live` runs the 20 development and 15 held-out v1 synthetic comment attacks through the real Groq-backed agent with guardrails on and off. It paces requests and resumes completed cases from an ignored local cache, then generates `evals/reports/attacks_live.md` and `.json`. `make eval-classifier-live` measures the optional live Groq classifier over the frozen development, v1, and v2 sets while the rest of the agent uses the offline mock LLM; it generates `evals/reports/injection_classifier.md` and `.json`. Both are optional free-tier runs outside CI and need `LLM_PROVIDER=groq` with a free `GROQ_API_KEY`. On Windows without GNU Make, use `.\.venv\Scripts\python.exe -m evals.run_attacks_live` and `.\.venv\Scripts\python.exe -m evals.run_classifier_eval`. See [evaluation methodology](docs/EVALUATION.md) for what these scores can and cannot show.
+
 ## Measured Phase 6 retrieval results (mock LLM suite; ranking uses no LLM)
 
 The offline suite measured 55 labeled queries over 400 recorded issue/PR documents. Hit rate and MRR use the first three distinct source documents.

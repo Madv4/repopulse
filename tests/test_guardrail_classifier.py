@@ -9,7 +9,7 @@ from repopulse.agent import RepoPulseAgent
 from repopulse.config import Settings
 from repopulse.guardrail_classifier import InjectionClassifier
 from repopulse.guardrails import Guardrails
-from repopulse.llm import ChatMessage, LLMProvider, LLMResponse
+from repopulse.llm import ChatMessage, LLMProvider, LLMResponse, ProviderError
 from repopulse.llm.mock import MockProvider
 from repopulse.mcp_server import Evidence, ToolEvidence
 from repopulse.observability.tracer import TraceWriter, load_trace
@@ -51,6 +51,14 @@ class RecordedGateway:
 
     async def call(self, name: str, arguments: dict[str, str | int]) -> ToolEvidence:
         return ToolEvidence(evidence=self.evidence)
+
+
+class FailingClassifierProvider(FixtureClassifierProvider):
+    def complete(
+        self, messages: Sequence[ChatMessage], *, max_output_tokens: int | None = None,
+        json_mode: bool = False,
+    ) -> LLMResponse:
+        raise ProviderError("LLM service returned HTTP 500")
 
 
 def _agent_reply(messages: tuple[ChatMessage, ...]) -> str:
@@ -125,3 +133,28 @@ def test_mock_configuration_keeps_classifier_offline() -> None:
 
     settings = Settings(_env_file=None, llm_provider="mock", guard_injection_classifier=True)
     assert not _guardrails(settings).injection_classifier
+
+
+def test_classifier_failure_degrades_to_heuristic_filtering(tmp_path: Path) -> None:
+    evidence = Evidence(
+        url="https://github.com/o/r/issues/4", kind="issue",
+        title="Ordinary discussion", excerpt="A normal issue report."
+    )
+    trace = TraceWriter(tmp_path / "traces")
+    agent = RepoPulseAgent(
+        MockProvider(responder=_agent_reply), RecordedGateway([evidence]),
+        max_steps=1, token_budget=12000, trace=trace,
+        guardrails=Guardrails(injection_classifier=True),
+        injection_classifier=InjectionClassifier(
+            FailingClassifierProvider(), tmp_path / "cache"
+        ),
+    )
+    answer = asyncio.run(agent.ask("What happened?", "o/r"))
+    events = load_trace(trace.path.parent, trace.run_id)
+    assert answer.degraded
+    assert any("classifier unavailable" in reason.lower()
+               for reason in answer.degradation_reasons)
+    assert any(event["event"] == "guardrail" and event.get("guard") == "injection_classifier"
+               and event.get("decision") == "error" for event in events)
+    assert any(event["event"] == "evidence" and event["disposition"] == "accepted"
+               for event in events)
